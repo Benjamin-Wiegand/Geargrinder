@@ -16,9 +16,6 @@ import android.util.Log;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import io.benwiegand.projection.geargrinder.callback.MessageListener;
 import io.benwiegand.projection.geargrinder.crypto.TLSService;
@@ -27,9 +24,6 @@ import io.benwiegand.projection.geargrinder.util.ByteUtil;
 
 public class MessageBroker {
     private static final String TAG = MessageBroker.class.getSimpleName();
-
-    private static final int THREAD_POOL_SIZE = 3;
-    private static final long THREAD_POOL_KEEP_ALIVE = 100; // ms
 
     /**
      * how many buffers to allocate for writing sequences.
@@ -43,7 +37,6 @@ public class MessageBroker {
 
     private final Object writeLock = new Object();
 
-    private final ThreadPoolExecutor threadPool = new ThreadPoolExecutor(THREAD_POOL_SIZE, THREAD_POOL_SIZE, THREAD_POOL_KEEP_ALIVE, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<>());
     private final Map<Integer, MessageListener> messageHandlers = new HashMap<>();
 
     private final byte[] readBuffer = new byte[AAFrame.MAX_LENGTH];
@@ -73,7 +66,6 @@ public class MessageBroker {
         Log.i(TAG, "destroying message broker");
         closeConnection();
         messageHandlers.clear();
-        threadPool.shutdown();
     }
 
 
@@ -251,26 +243,22 @@ public class MessageBroker {
         }
 
         // decrypt payload
-        byte[] payload;
         if ((flags & FLAG_ENCRYPTED) != 0) {
             if (tlsService.needsHandshake()) {
                 Log.wtf(TAG, "encrypted message before handshake?!");
-                if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX raw: " + ByteUtil.hexDump(readBuffer, 0, length));
+                if (LOG_MESSAGE_DEBUG)
+                    Log.d(TAG, "RX raw: " + ByteUtil.hexDump(readBuffer, 0, length));
                 throw new AssertionError("received encrypted message before ssl/tls handshake");
             }
 
-            payload = tlsService.decrypt(readBuffer, HEADER_LENGTH, payloadLength, out -> {
-                byte[] decryptedPayload = new byte[out.remaining()];
-                out.get(decryptedPayload);
-                return decryptedPayload;
+            payloadLength = tlsService.decrypt(readBuffer, HEADER_LENGTH, payloadLength, out -> {
+                int decryptedLength = out.remaining();
+                out.get(readBuffer, HEADER_LENGTH, out.remaining());
+                return decryptedLength;
             });
-        } else {
-            // not encrypted
-            payload = new byte[payloadLength];
-            System.arraycopy(readBuffer, HEADER_LENGTH, payload, 0, payloadLength);
         }
 
-        if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX payload: " + ByteUtil.hexDump(payload));
+        if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX frame: " + ByteUtil.hexDump(readBuffer, HEADER_LENGTH, payloadLength));
 
         // callback
         MessageListener handler = messageHandlers.get(channelId);
@@ -279,14 +267,12 @@ public class MessageBroker {
             return;
         }
 
-        threadPool.execute(() -> {
-            try {
-                handler.onMessage(channelId, flags, payload, 0, payload.length);
-            } catch (Throwable t) {
-                Log.wtf(TAG, "exception in message handler", t);
-                closeConnection();  // this isn't supposed to happen
-            }
-        });
+        try {
+            handler.onMessage(channelId, flags, readBuffer, HEADER_LENGTH, payloadLength);
+        } catch (Throwable t) {
+            Log.wtf(TAG, "exception in message handler", t);
+            closeConnection();  // this isn't supposed to happen
+        }
     }
 
     public void loop() {
