@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    >
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Lorem ipsum blah blah blah"
+        />
+
+    <Button
+        android:id="@+id/force_start_service_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="force start connection service"
+        />
+
+    <Button
+        android:id="@+id/start_audio_capture_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="request media projection"
+        />
+
+    <Button
+        android:id="@+id/log_marker_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="insert log marker"
+        />
+
+    <Button
+        android:id="@+id/toggle_recording_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="log recording"
+        />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/log_recycler"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingBottom="8dp"
+        android:background="@color/black"
+        />
+
+</LinearLayout>

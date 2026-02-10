@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Geargrinder</string>
+
+    <string name="connection_foreground_notification_channel_name">Active Connection</string>
+    <string name="connection_error_notification_channel_name">Connection Error</string>
+
+    <string name="looking_for_car">looking for car…</string>
+    <string name="connecting_to_car">connecting to your car…</string>
+    <string name="connected_to_car">connected to your car</string>
+
+    <string name="car_connection_error">car connection error</string>
+    <string name="error_grant_usb_permission">Geargrinder needs permission to connect to your car</string>
+    <string name="error_no_usb_headunit">couldn\'t find your car over USB</string>
+
+    <string name="car_connection_unexpected_error">unexpected car connection error</string>
+    <string name="error_car_io_usb_generic">lost connection with your car. check the cable or try again.</string>
+    <string name="post_notifications_permission_rationale">Notifications are used to communicate errors and connection status. Geargrinder may not work properly without this permission.</string>
+    <string name="not_now_button">not now</string>
+    <string name="grant_permission_button">grant</string>
+    <string name="post_notifications_permission_request">Notifications permission</string>
+    <string name="accessibility_service_description">Allows Geargrinder to forward inputs from your car to your device.</string>
+    <string name="close_button">close</string>
+    <string name="cancel_button">cancel</string>
+    <string name="launch_app">Launch app</string>
+
+</resources>
