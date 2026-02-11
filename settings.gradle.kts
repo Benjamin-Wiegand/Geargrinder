@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Geargrinder"
 include(":app")
- 
+include(":privd")
