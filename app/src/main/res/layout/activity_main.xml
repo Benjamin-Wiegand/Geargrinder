@@ -15,31 +15,58 @@
 
     <Button
         android:id="@+id/force_start_service_button"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="force start connection service"
         />
 
-    <Button
-        android:id="@+id/start_audio_capture_button"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="request media projection"
-        />
+        android:orientation="horizontal"
+        >
 
-    <Button
-        android:id="@+id/log_marker_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="insert log marker"
-        />
+        <Button
+            android:id="@+id/start_audio_capture_button"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="request media projection"
+            />
 
-    <Button
-        android:id="@+id/toggle_recording_button"
-        android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/launch_privd_button"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="launch privd"
+            />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="log recording"
-        />
+        android:orientation="horizontal"
+        >
+
+        <Button
+            android:id="@+id/log_marker_button"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="insert log marker"
+            />
+
+        <Button
+            android:id="@+id/toggle_recording_button"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="log recording"
+            />
+
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/log_recycler"

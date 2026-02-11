@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -24,6 +25,7 @@ import java.io.IOException;
 
 import io.benwiegand.projection.geargrinder.logs.LogUiAdapter;
 import io.benwiegand.projection.geargrinder.logs.LogcatReader;
+import io.benwiegand.projection.geargrinder.privileged.RootPrivdLauncher;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -64,6 +66,15 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.start_audio_capture_button).setOnClickListener(v ->
                 startActivity(new Intent(this, ConnectionRequestActivity.class)
                         .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION)));
+
+        findViewById(R.id.launch_privd_button).setOnClickListener(v -> {
+            RootPrivdLauncher privdLauncher = new RootPrivdLauncher(this);
+            try {
+                privdLauncher.launchRoot();
+            } catch (IOException e) {
+                Log.e(TAG, "failed to launch privd", e);
+            }
+        });
 
         findViewById(R.id.log_marker_button).setOnClickListener(v -> logcatReader.addMarker());
 
@@ -128,4 +139,15 @@ public class MainActivity extends AppCompatActivity {
         logcatReader.destroy();
     }
 
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent event) {
+        Log.v(TAG, "motion event: " + event);
+        return super.onGenericMotionEvent(event);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.v(TAG, "touch event: " + event);
+        return super.onTouchEvent(event);
+    }
 }
