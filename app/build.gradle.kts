@@ -34,6 +34,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":libprivd"))
 
     implementation(libs.appcompat)
     implementation(libs.material)

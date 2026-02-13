@@ -26,11 +26,16 @@ androidComponents {
             group = "build"
             description = "privileged daemon jar asset"
             dependsOn(tasks.build)
+            dependsOn(":libprivd:build")
 
             val outputJar = rootProject.projectDir.resolve("app/src/main/assets/privd.jar")
             val androidJar = "${android.sdkDirectory.path}/platforms/android-${android.defaultConfig.targetSdk}/android.jar"
             val classesDir = layout.buildDirectory.dir("intermediates/javac/${buildType}/compile${buildTypeUpper}JavaWithJavac/classes")
+            val libClassesDir = rootProject.projectDir.resolve("libprivd/build/intermediates/javac/${buildType}/compile${buildTypeUpper}JavaWithJavac/classes")
             val classFiles = Files.walk(file(classesDir).toPath())
+                .filter { it.toFile().isFile() }
+                .toArray()
+            val libClassFiles = Files.walk(file(libClassesDir).toPath())
                 .filter { it.toFile().isFile() }
                 .toArray()
 
@@ -39,8 +44,12 @@ androidComponents {
                 "--release",
                 "--output", outputJar,
                 "--classpath", androidJar,
-                *classFiles
+                *classFiles, *libClassFiles
             )
         }
     }
+}
+
+dependencies {
+    implementation(project(":libprivd"))
 }

@@ -26,11 +26,13 @@ import java.io.IOException;
 import io.benwiegand.projection.geargrinder.logs.LogUiAdapter;
 import io.benwiegand.projection.geargrinder.logs.LogcatReader;
 import io.benwiegand.projection.geargrinder.privileged.RootPrivdLauncher;
+import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private LogcatReader logcatReader;
+    private RootPrivdLauncher privdLauncher;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -68,7 +70,6 @@ public class MainActivity extends AppCompatActivity {
                         .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION)));
 
         findViewById(R.id.launch_privd_button).setOnClickListener(v -> {
-            RootPrivdLauncher privdLauncher = new RootPrivdLauncher(this);
             try {
                 privdLauncher.launchRoot();
             } catch (IOException e) {
@@ -113,6 +114,14 @@ public class MainActivity extends AppCompatActivity {
                     .setCancelable(false)
                     .show();
 
+        });
+
+        privdLauncher = new RootPrivdLauncher(this, connection -> {
+            Log.i(TAG, "IPC connected");
+            connection.send(IPCConstants.COMMAND_PING)
+                    .doOnResult(r -> Log.i(TAG, "pong from daemon"))
+                    .doOnError(t -> Log.e(TAG, "failed to ping daemon", t))
+                    .callMeWhenDone();
         });
 
         RecyclerView logRecyclerView = findViewById(R.id.log_recycler);
