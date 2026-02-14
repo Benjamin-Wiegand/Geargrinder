@@ -34,7 +34,7 @@ public class InputChannel implements MessageListener {
     private final MessageBroker.MessageSendParameters messageParams;
 
     private InputEventListener inputEventListener = null;
-    private final CoordinateTranslator<TouchEvent.PointerLocation> touchCoordinateTranslator = CoordinateTranslator.createPassthrough(TouchEvent.PointerLocation.class);
+    private final CoordinateTranslator<TouchEvent.PointerLocation> touchCoordinateTranslator = CoordinateTranslator.createTouchEventPassthrough();
 
     public InputChannel(MessageBroker mb, InputChannelMeta channelMeta) {
         this.mb = mb;

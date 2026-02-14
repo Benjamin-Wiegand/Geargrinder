@@ -1,4 +1,4 @@
-package io.benwiegand.projection.geargrinder.privd.reflection;
+package io.benwiegand.projection.libprivd.reflection;
 
 /**
  * general exception for reflection-related problems.

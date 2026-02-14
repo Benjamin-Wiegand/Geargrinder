@@ -22,6 +22,10 @@ public record InputChannelMeta(
         return touchScreenMeta() != null;
     }
 
+    public static InputChannelMeta getDefault() {
+        return new InputChannelMeta(-1, new int[0], null, null);
+    }
+
     public static InputChannelMeta parse(int channelId, byte[] buffer, int offset, int length) {
         try {
             Map<Integer, List<ProtoParser.ProtoField>> fields = ProtoParser.parse(buffer, offset, length);

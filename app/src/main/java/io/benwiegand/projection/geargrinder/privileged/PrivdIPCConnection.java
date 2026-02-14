@@ -11,11 +11,11 @@ import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 public class PrivdIPCConnection extends IPCConnection {
     private static final String TAG = PrivdIPCConnection.class.getSimpleName();
 
-    private final IPCServer.ConnectionInitCallback initCallback;
+    private final IPCServer.ConnectionListener connectionCallback;
 
-    public PrivdIPCConnection(Socket socket, byte[] tokenA, byte[] tokenB, IPCServer.ConnectionInitCallback initCallback) throws IOException {
+    public PrivdIPCConnection(Socket socket, byte[] tokenA, byte[] tokenB, IPCServer.ConnectionListener connectionCallback) throws IOException {
         super(socket, tokenA, tokenB);
-        this.initCallback = initCallback;
+        this.connectionCallback = connectionCallback;
     }
 
     @Override
@@ -25,7 +25,7 @@ public class PrivdIPCConnection extends IPCConnection {
 
     @Override
     protected void onInitComplete(boolean success) {
-        initCallback.onInitComplete(success);
+        connectionCallback.onInitComplete(this, success);
     }
 
     @Override
@@ -44,7 +44,7 @@ public class PrivdIPCConnection extends IPCConnection {
 
     @Override
     protected void onClose() {
-        // TODO
         Log.e(TAG, "connection closed");
+        connectionCallback.onDisconnected(this);
     }
 }

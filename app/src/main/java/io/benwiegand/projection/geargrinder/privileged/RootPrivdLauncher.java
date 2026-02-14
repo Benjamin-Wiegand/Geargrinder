@@ -5,6 +5,7 @@ import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN_A;
 import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN_B;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.util.Base64;
 import android.util.Log;
 
@@ -17,6 +18,7 @@ import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 
 public class RootPrivdLauncher {
     private static final String TAG = RootPrivdLauncher.class.getSimpleName();
+    private static final long DAEMON_LAUNCH_COOLDOWN = 5000;
 
     private static final String PRIVD_FILE_NAME = "privd.jar";
     private static final String ENV_CLASSPATH = "CLASSPATH";
@@ -24,6 +26,8 @@ public class RootPrivdLauncher {
     private final Context context;
     private final IPCConnectionListener connectionListener;
     private final File daemonFile;
+
+    private long lastLaunched = 0;
 
     private IPCServer server = null;
     private Process rootProcess = null;
@@ -40,6 +44,12 @@ public class RootPrivdLauncher {
     }
 
     public void launchRoot() throws IOException {
+        if (lastLaunched + DAEMON_LAUNCH_COOLDOWN > SystemClock.elapsedRealtime()) {
+            Log.d(TAG, "not launching daemon, already launched it " + (SystemClock.elapsedRealtime() - lastLaunched) + " ms ago");
+            return;
+        }
+        lastLaunched = SystemClock.elapsedRealtime();
+
         killRootProcess();
         copyDaemon();
         startServer();

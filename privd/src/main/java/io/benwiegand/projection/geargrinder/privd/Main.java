@@ -12,9 +12,9 @@ import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
 
-import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
+import io.benwiegand.projection.libprivd.reflection.ReflectionException;
 import io.benwiegand.projection.geargrinder.privd.ipc.IPCClient;
-import io.benwiegand.projection.geargrinder.privd.reflection.reflected.ReflectedActivityThread;
+import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedActivityThread;
 import io.benwiegand.projection.libprivd.ipc.IPCConnection;
 
 public class Main {
@@ -40,6 +40,8 @@ public class Main {
     public static void main(String[] args) {
         Log.i(TAG, "Geargrinder privd");
 
+
+        // env
         int port;
         byte[] tokenA;
         byte[] tokenB;
@@ -61,10 +63,28 @@ public class Main {
             return;
         }
 
+
+        // context
+        Looper.prepareMainLooper();
+        Context context;
+        try {
+            ReflectedActivityThread activityThread = new ReflectedActivityThread();
+
+            context = activityThread.getSystemContext();
+            Log.i(TAG, "got a system context: " + context);
+
+        } catch (ReflectionException e) {
+            Log.e(TAG, "failed to get system context", e);
+            System.exit(1);
+            return;
+        }
+
+
+        // ipc
         IPCClient ipcClient;
         IPCConnection connection;
         try {
-            ipcClient = new IPCClient(port, tokenA, tokenB);
+            ipcClient = new IPCClient(context, port, tokenA, tokenB);
             connection = ipcClient.connect();
             connection.waitForInit(IPC_INIT_TIMEOUT);
         } catch (Throwable t) {
@@ -73,26 +93,16 @@ public class Main {
             return;
         }
 
-        Looper.prepareMainLooper();
 
+        // ping loop
         Handler handler = new Handler(Looper.getMainLooper());
         if (!handler.post(() -> pingTask(handler, connection))) {
             Log.e(TAG, "failed to post ping task");
             System.exit(1);
         }
 
-        try {
-            ReflectedActivityThread activityThread = new ReflectedActivityThread();
 
-            Context context = activityThread.getSystemContext();
-            Log.i(TAG, "got a system context: " + context);
-
-        } catch (ReflectionException e) {
-            Log.e(TAG, "failed to get system context", e);
-            System.exit(1);
-        }
-
+        // loop until death
         Looper.loop();
-
     }
 }

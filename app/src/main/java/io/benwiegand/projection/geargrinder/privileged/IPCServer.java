@@ -32,10 +32,10 @@ public class IPCServer {
     private final PrivdIPCConnection[] connections = new PrivdIPCConnection[MAX_CONNECTIONS];
     private int activeConnection = 0;
 
-    private final IPCConnectionListener connectionListener;
+    private final IPCConnectionListener ipcConnectionListener;
 
-    public IPCServer(IPCConnectionListener connectionListener) {
-        this.connectionListener = connectionListener;
+    public IPCServer(IPCConnectionListener ipcConnectionListener) {
+        this.ipcConnectionListener = ipcConnectionListener;
         try {
             serverThread = new Thread(this::serverLoop, "geargrinder-ipc-server");
 //            server = SSLServerSocketFactory.getDefault().createServerSocket();
@@ -48,9 +48,61 @@ public class IPCServer {
         }
     }
 
-    public interface ConnectionInitCallback {
-        void onInitComplete(boolean success);
+    public interface ConnectionListener {
+        void onInitComplete(PrivdIPCConnection connection, boolean success);
+        void onDisconnected(PrivdIPCConnection connection);
     }
+
+    private final ConnectionListener serverConnectionListener = new ConnectionListener() {
+        @Override
+        public void onInitComplete(PrivdIPCConnection connection, boolean success) {
+            if (!success) return;
+
+            synchronized (connections) {
+                int connectionId = findConnectionIdLocked(connection);
+                if (connectionId == -1) {
+                    if (dead) return;
+                    Log.wtf(TAG, "failed to find connection in onInitComplete()");
+                    assert false;
+                }
+
+                Log.v(TAG, "new active connection: " + connection);
+                activeConnection = connectionId;
+                ipcConnectionListener.onPrivdConnected(connection);
+            }
+        }
+
+        @Override
+        public void onDisconnected(PrivdIPCConnection connection) {
+            synchronized (connections) {
+                int connectionId = findConnectionIdLocked(connection);
+                if (connectionId == -1) {
+                    if (dead) return;
+                    Log.wtf(TAG, "failed to find connection in onDisconnected()");
+                    assert false;
+                }
+
+                connections[connectionId] = null;
+
+                if (connectionId != activeConnection) return;
+                Log.w(TAG, "active connection died");
+                activeConnection = -1;
+
+                // unlikely that this happens, but just in case
+                for (int i = 0; i < connections.length; i++) {
+                    if (connections[i] == null) continue;
+                    if (!connections[i].isAlive()) continue;
+                    activeConnection = i;
+
+                    Log.v(TAG, "promoting new active connection: " + connections[i]);
+                    ipcConnectionListener.onPrivdConnected(connections[i]);
+                    return;
+                }
+
+                ipcConnectionListener.onPrivdDisconnected();
+            }
+        }
+    };
 
     public void close() {
         if (dead) return;
@@ -107,6 +159,14 @@ public class IPCServer {
         }
     }
 
+    private int findConnectionIdLocked(PrivdIPCConnection connection) {
+        for (int i = 0; i < connections.length; i++) {
+            if (connection != connections[i]) continue;
+            return i;
+        }
+        return -1;
+    }
+
     private int findFreeConnectionIdLocked() {
         int id = -1;
         for (int i = 0; i < connections.length; i++) {
@@ -139,17 +199,7 @@ public class IPCServer {
                         continue;
                     }
 
-                    connections[connectionId] = new PrivdIPCConnection(socket, tokenA, tokenB, success -> {
-                        synchronized (connections) {
-                            if (!success) {
-                                connections[connectionId] = null;
-                                return;
-                            }
-
-                            activeConnection = connectionId;
-                            connectionListener.onPrivdConnected(connections[connectionId]);
-                        }
-                    });
+                    connections[connectionId] = new PrivdIPCConnection(socket, tokenA, tokenB, serverConnectionListener);
                 }
             }
         } catch (IOException e) {

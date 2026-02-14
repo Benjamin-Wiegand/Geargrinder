@@ -7,7 +7,6 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -25,14 +24,11 @@ import java.io.IOException;
 
 import io.benwiegand.projection.geargrinder.logs.LogUiAdapter;
 import io.benwiegand.projection.geargrinder.logs.LogcatReader;
-import io.benwiegand.projection.geargrinder.privileged.RootPrivdLauncher;
-import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private LogcatReader logcatReader;
-    private RootPrivdLauncher privdLauncher;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -65,17 +61,13 @@ public class MainActivity extends AppCompatActivity {
                 startService(new Intent(this, ConnectionService.class)
                         .setAction(ConnectionService.INTENT_ACTION_CONNECT_USB)));
 
+        findViewById(R.id.launch_privd_button).setOnClickListener(v -> {
+            startService(new Intent(this, PrivdService.class));
+        });
+
         findViewById(R.id.start_audio_capture_button).setOnClickListener(v ->
                 startActivity(new Intent(this, ConnectionRequestActivity.class)
                         .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION)));
-
-        findViewById(R.id.launch_privd_button).setOnClickListener(v -> {
-            try {
-                privdLauncher.launchRoot();
-            } catch (IOException e) {
-                Log.e(TAG, "failed to launch privd", e);
-            }
-        });
 
         findViewById(R.id.log_marker_button).setOnClickListener(v -> logcatReader.addMarker());
 
@@ -116,14 +108,6 @@ public class MainActivity extends AppCompatActivity {
 
         });
 
-        privdLauncher = new RootPrivdLauncher(this, connection -> {
-            Log.i(TAG, "IPC connected");
-            connection.send(IPCConstants.COMMAND_PING)
-                    .doOnResult(r -> Log.i(TAG, "pong from daemon"))
-                    .doOnError(t -> Log.e(TAG, "failed to ping daemon", t))
-                    .callMeWhenDone();
-        });
-
         RecyclerView logRecyclerView = findViewById(R.id.log_recycler);
         LogUiAdapter logUiAdapter = new LogUiAdapter();
 
@@ -148,15 +132,4 @@ public class MainActivity extends AppCompatActivity {
         logcatReader.destroy();
     }
 
-    @Override
-    public boolean onGenericMotionEvent(MotionEvent event) {
-        Log.v(TAG, "motion event: " + event);
-        return super.onGenericMotionEvent(event);
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        Log.v(TAG, "touch event: " + event);
-        return super.onTouchEvent(event);
-    }
 }

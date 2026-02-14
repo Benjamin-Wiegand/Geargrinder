@@ -82,6 +82,11 @@
                 android:resource="@xml/accessibility_service_meta" />
         </service>
 
+        <service
+            android:name=".PrivdService"
+            android:exported="false"
+            />
+
     </application>
 
 </manifest>

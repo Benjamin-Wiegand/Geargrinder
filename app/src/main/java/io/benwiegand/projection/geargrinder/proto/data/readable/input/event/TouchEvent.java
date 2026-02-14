@@ -2,6 +2,7 @@ package io.benwiegand.projection.geargrinder.proto.data.readable.input.event;
 
 import android.util.Base64;
 import android.util.Log;
+import android.view.MotionEvent;
 
 import java.util.Arrays;
 import java.util.List;
@@ -17,13 +18,6 @@ public record TouchEvent(
     private static final String TAG = TouchEvent.class.getSimpleName();
 
     public record PointerLocation(int x, int y, int pointerIndex) {
-        public int xScaled(int srcWidth, int dstWidth) {
-            return (dstWidth * x) / srcWidth;
-        }
-
-        public int yScaled(int srcHeight, int dstHeight) {
-            return (dstHeight * y) / srcHeight;
-        }
 
         public static PointerLocation parse(byte[] buffer, int offset, int length) {
             try {
@@ -59,6 +53,14 @@ public record TouchEvent(
             if (value >= values().length) return null;
             return values()[value];
         }
+    }
+
+    public int pointerCount() {
+        return pointerLocations().length;
+    }
+
+    public int actionInt() {
+        return action().ordinal() + (actionPointerIndex() << MotionEvent.ACTION_POINTER_INDEX_SHIFT);
     }
 
     public static TouchEvent parse(byte[] buffer, int offset, int length) {

@@ -11,6 +11,7 @@ public class IPCConstants {
     public static final int FLAG_REPLY = 1;
 
     public static final int COMMAND_PING = 0;
+    public static final int COMMAND_INJECT_MOTION_EVENT = 10;
 
     public static final int REPLY_SUCCESS = 0;
     public static final int REPLY_FAILURE = 1;

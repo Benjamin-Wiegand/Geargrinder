@@ -1,19 +1,22 @@
 package io.benwiegand.projection.libprivd.ipc;
 
-import android.os.Parcel;
-import android.os.Parcelable;
 import android.os.SystemClock;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,9 +30,11 @@ public abstract class IPCConnection {
     private static final int AUTH_TIMEOUT = 1000;
 
     private final Map<Integer, SecAdapter<Reply>> pendingReplyMap = new ConcurrentHashMap<>();
+    private final Queue<IPCMessage> outgoingMessageQueue = new ConcurrentLinkedQueue<>();
 
     private final Object writeLock = new Object();
-    private final Thread connectionThread;
+    private final Thread readThread;
+    private final Thread writeThread;
 
     private final Socket socket;
     private final InputStream is;
@@ -47,7 +52,8 @@ public abstract class IPCConnection {
     private boolean dead = false;
 
     public IPCConnection(Socket socket, byte[] tokenA, byte[] tokenB) throws IOException {
-        this.connectionThread = new Thread(this::connectionLoop, "geargrinder-ipc");
+        this.readThread = new Thread(this::connectionLoop, "geargrinder-ipc-read");
+        this.writeThread = new Thread(this::writeLoop, "geargrinder-ipc-write");
         this.socket = socket;
         is = socket.getInputStream();
         os = socket.getOutputStream();
@@ -55,7 +61,8 @@ public abstract class IPCConnection {
         this.tokenA = tokenA;
         this.tokenB = tokenB;
 
-        connectionThread.start();
+        readThread.start();
+        writeThread.start();
     }
 
     public void close() {
@@ -69,7 +76,8 @@ public abstract class IPCConnection {
         }
 
         dead = true;
-        connectionThread.interrupt();
+        readThread.interrupt();
+        writeThread.interrupt();
 
         while (!pendingReplyMap.isEmpty()) {
             Set<Integer> messageIds = new HashSet<>(pendingReplyMap.keySet());
@@ -136,16 +144,17 @@ public abstract class IPCConnection {
         if (dead) return Sec.premeditatedError(new IOException("connection closed"));
         SecAdapter.SecWithAdapter<Reply> secWithAdapter = SecAdapter.createThreadless();
 
-        synchronized (writeLock) {
+        synchronized (outgoingMessageQueue) {
             int msgId = nextMsgId();
             pendingReplyMap.put(msgId, secWithAdapter.secAdapter());
 
             try {
-                writeMsg(new IPCMessage(writeBuffer)
+                outgoingMessageQueue.add(new IPCMessage(new byte[IPCMessage.HEADER_LENGTH + length])
                         .clear()
                         .setMessageId(msgId)
                         .setCommand(command)
                         .copyData(data, offset, length));
+                outgoingMessageQueue.notify();
             } catch (Throwable t) {
                 pendingReplyMap.remove(msgId);
                 return Sec.premeditatedError(t);
@@ -159,14 +168,20 @@ public abstract class IPCConnection {
         return send(command, data, 0, data.length);
     }
 
-    public Sec<Reply> send(int command, Parcelable parcelable) {
-        Parcel parcel = Parcel.obtain();
-        parcelable.writeToParcel(parcel, 0);
+    public Sec<Reply> send(int command, Serializable serializable) {
+        byte[] data;
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
 
-        Sec<Reply> sec = send(command, parcel.marshall());
+            oos.writeObject(serializable);
+            oos.flush();
+            data = baos.toByteArray();
 
-        parcel.recycle();
-        return sec;
+        } catch (IOException e) {
+            return Sec.premeditatedError(e);
+        }
+
+        return send(command, data);
     }
 
     public Sec<Reply> send(int command) {
@@ -209,7 +224,9 @@ public abstract class IPCConnection {
     }
 
     private void writeMsg(IPCMessage msg) throws IOException {
-        os.write(msg.getBuffer(), 0, IPCMessage.HEADER_LENGTH + msg.getDataLength());
+        synchronized (writeLock) {
+            os.write(msg.getBuffer(), 0, IPCMessage.HEADER_LENGTH + msg.getDataLength());
+        }
     }
 
     private void readMsg(IPCMessage msg) throws IOException {
@@ -219,13 +236,33 @@ public abstract class IPCConnection {
     }
 
     private void sendReply(Reply reply, int messageId) throws IOException {
-        synchronized (writeLock) {
-            writeMsg(new IPCMessage(writeBuffer)
-                    .clear()
-                    .setMessageId(messageId)
-                    .setFlags(IPCConstants.FLAG_REPLY)
-                    .setCommand(reply.status)
-                    .copyData(reply.data, reply.offset, reply.length));
+        writeMsg(new IPCMessage(writeBuffer)
+                .clear()
+                .setMessageId(messageId)
+                .setFlags(IPCConstants.FLAG_REPLY)
+                .setCommand(reply.status)
+                .copyData(reply.data, reply.offset, reply.length));
+    }
+
+    private void writeLoop() {
+        try {
+            while (socket.isConnected() && !dead) {
+                IPCMessage msg = outgoingMessageQueue.poll();
+
+                if (msg == null) {
+                    synchronized (outgoingMessageQueue) {
+                        if (!outgoingMessageQueue.isEmpty()) continue;
+                        outgoingMessageQueue.wait();
+                        continue;
+                    }
+                }
+
+                writeMsg(msg);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "IOException in write loop", e);
+        } catch (InterruptedException e) {
+            Log.e(TAG, "write loop interrupted");
         }
     }
 
@@ -256,7 +293,7 @@ public abstract class IPCConnection {
             onInitComplete(true);
 
             IPCMessage msg = new IPCMessage(readBuffer);
-            while (socket.isConnected()) {
+            while (socket.isConnected() && !dead) {
                 readMsg(msg);
 
                 if (msg.isReply()) {
@@ -270,8 +307,19 @@ public abstract class IPCConnection {
                     continue;
                 }
 
-                Reply reply = onCommand(msg.getCommand(), msg.getBuffer(), IPCMessage.HEADER_LENGTH, msg.getDataLength());
-                sendReply(reply, msg.getMessageId());
+                Reply reply = null;
+                try {
+                    reply = onCommand(msg.getCommand(), msg.getBuffer(), IPCMessage.HEADER_LENGTH, msg.getDataLength());
+                    assert reply != null; // should never be null
+                } catch (Throwable t) {
+                    Log.e(TAG, "exception in onCommand()", t);
+                }
+
+                if (reply != null) {
+                    sendReply(reply, msg.getMessageId());
+                } else {
+                    sendReply(new Reply(IPCConstants.REPLY_FAILURE), msg.getMessageId());
+                }
             }
 
         } catch (IOException e) {

@@ -1,5 +1,6 @@
 package io.benwiegand.projection.geargrinder.privd.ipc;
 
+import android.content.Context;
 import android.util.Log;
 
 import java.io.IOException;
@@ -14,13 +15,15 @@ public class IPCClient {
 
     private static final InetAddress SERVER_ADDRESS = InetAddress.getLoopbackAddress();
 
+    private final Context context;
     private final Socket socket;
     private final int port;
 
     private final byte[] tokenA;
     private final byte[] tokenB;
 
-    public IPCClient(int port, byte[] tokenA, byte[] tokenB) throws IOException {
+    public IPCClient(Context context, int port, byte[] tokenA, byte[] tokenB) throws IOException {
+        this.context = context;
         // TODO
 //        socket = SSLSocketFactory.getDefault().createSocket();
         socket = new Socket();
@@ -33,6 +36,6 @@ public class IPCClient {
         InetSocketAddress socketAddress = new InetSocketAddress(SERVER_ADDRESS, port);
         Log.i(TAG, "connecting to " + socketAddress);
         socket.connect(socketAddress);
-        return new AppIPCConnection(socket, tokenA, tokenB);
+        return new AppIPCConnection(socket, tokenA, tokenB, context);
     }
 }

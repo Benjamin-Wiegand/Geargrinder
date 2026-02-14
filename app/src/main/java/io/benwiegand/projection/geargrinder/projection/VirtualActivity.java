@@ -1,7 +1,6 @@
 package io.benwiegand.projection.geargrinder.projection;
 
-import static io.benwiegand.projection.geargrinder.util.UiUtil.getViewBoundsInDisplay;
-
+import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
@@ -10,6 +9,7 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -20,24 +20,22 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import java.io.IOException;
+import java.util.Optional;
+import java.util.function.Supplier;
 
+import io.benwiegand.projection.geargrinder.PrivdService;
 import io.benwiegand.projection.geargrinder.R;
-import io.benwiegand.projection.geargrinder.callback.InputEventListener;
-import io.benwiegand.projection.geargrinder.coordinate.CoordinateTranslator;
-import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 import io.benwiegand.projection.geargrinder.shell.RootShell;
-import io.benwiegand.projection.geargrinder.util.RootUtil;
+import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 
-public class VirtualActivity implements SurfaceHolder.Callback, InputEventListener {
+public class VirtualActivity implements SurfaceHolder.Callback {
     private static final String TAG = VirtualActivity.class.getSimpleName();
 
     private static final long SPLASH_SHOW_DURATION = 3000;
     private static final long SPLASH_ANIMATION_DURATION = 300;
 
-    private final RootShell rootShell;
+    private final Supplier<Optional<PrivdService.ServiceBinder>> privdGetter;
     private final VirtualDisplay virtualDisplay;
-    private final InputEventMuxer inputEventMuxer;
-    private final InputEventMuxer.Destination inputDestination;
     private final int density;
     private int width;
     private int height;
@@ -45,9 +43,9 @@ public class VirtualActivity implements SurfaceHolder.Callback, InputEventListen
     private final View rootView;
     private final SurfaceView surfaceView;
 
-    public VirtualActivity(RootShell rootShell, InputEventMuxer inputEventMuxer, ComponentName componentName, ViewGroup parent) throws IOException, PackageManager.NameNotFoundException {
-        this.rootShell = rootShell;
-        this.inputEventMuxer = inputEventMuxer;
+    @SuppressLint("ClickableViewAccessibility")
+    public VirtualActivity(RootShell rootShell, ComponentName componentName, ViewGroup parent, Supplier<Optional<PrivdService.ServiceBinder>> privdGetter) throws IOException, PackageManager.NameNotFoundException {
+        this.privdGetter = privdGetter;
         density = parent.getResources().getDisplayMetrics().densityDpi;
         Context context = parent.getContext();
         DisplayManager dm = context.getSystemService(DisplayManager.class);
@@ -83,27 +81,28 @@ public class VirtualActivity implements SurfaceHolder.Callback, InputEventListen
         iconView.setImageDrawable(pm.getApplicationIcon(activityInfo.applicationInfo));
 
         // touch
-        inputDestination = inputEventMuxer.addDestination(this);
         surfaceView.getViewTreeObserver().addOnGlobalLayoutListener(() ->
                 onLayoutUpdated(surfaceView.getWidth(), surfaceView.getHeight()));
+        surfaceView.setOnTouchListener(this::onMotionEvent);
+        surfaceView.setOnGenericMotionListener(this::onMotionEvent);
     }
 
     public void destroy() {
-        inputEventMuxer.removeDestination(inputDestination);
         virtualDisplay.release();
     }
 
     private void showSplash(boolean animateIn) {
         View splash = rootView.findViewById(R.id.virtual_activity_splash);
-        // TODO: disable input
         splash.animate()
                 .setStartDelay(0)
                 .setDuration(animateIn ? SPLASH_ANIMATION_DURATION : 0)
                 .alpha(0.99f)
+                .withStartAction(() -> splash.setVisibility(View.VISIBLE))
                 .withEndAction(() -> splash.animate()
                         .setStartDelay(SPLASH_SHOW_DURATION)
                         .setDuration(SPLASH_ANIMATION_DURATION)
-                        .alpha(0f));
+                        .alpha(0f)
+                        .withEndAction(() -> splash.setVisibility(View.GONE)));
     }
 
     public void showSplash() {
@@ -114,8 +113,11 @@ public class VirtualActivity implements SurfaceHolder.Callback, InputEventListen
         return rootView;
     }
 
+    public int getDisplayId() {
+        return virtualDisplay.getDisplay().getDisplayId();
+    }
+
     private void onLayoutUpdated(int width, int height) {
-        getViewBoundsInDisplay(surfaceView, inputDestination.getBounds());
         if (this.width != width || this.height != height) {
             this.width = width;
             this.height = height;
@@ -135,7 +137,6 @@ public class VirtualActivity implements SurfaceHolder.Callback, InputEventListen
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surface created");
-        inputDestination.setEnabled(true);
         showSplash(false);
     }
 
@@ -143,15 +144,18 @@ public class VirtualActivity implements SurfaceHolder.Callback, InputEventListen
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surface destroyed");
         virtualDisplay.setSurface(null);
-        inputDestination.setEnabled(false);
     }
 
-    @Override
-    public void onTouchEvent(TouchEvent event, CoordinateTranslator<TouchEvent.PointerLocation> translator) {
-        try {
-            RootUtil.simulateTouchEventRoot(rootShell, virtualDisplay.getDisplay().getDisplayId(), event, translator);
-        } catch (IOException e) {
-            Log.e(TAG, "failed to simulate touch", e);
-        }
+    private boolean onMotionEvent(View view, MotionEvent event) {
+        privdGetter.get()
+                .map(privd -> privd.injectMotionEvent(SerializableMotionEvent.fromMotionEvent(event, getDisplayId())))
+                .ifPresent(sec -> sec
+                        .doOnResult(r -> {
+                            if (r) return;
+                            Log.w(TAG, "motion event result = false");
+                        })
+                        .doOnError(t -> Log.e(TAG, "failed to inject motion event", t))
+                        .callMeWhenDone());
+        return true;
     }
 }

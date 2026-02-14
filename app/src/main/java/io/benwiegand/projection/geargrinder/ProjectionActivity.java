@@ -1,9 +1,8 @@
 package io.benwiegand.projection.geargrinder;
 
-import static io.benwiegand.projection.geargrinder.util.UiUtil.getDisplayId;
-
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Bundle;
@@ -19,14 +18,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-import io.benwiegand.projection.geargrinder.callback.InputEventListener;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBindCallback;
-import io.benwiegand.projection.geargrinder.projection.InputEventMuxer;
 import io.benwiegand.projection.geargrinder.projection.VirtualActivity;
 import io.benwiegand.projection.geargrinder.shell.RootShell;
-import io.benwiegand.projection.geargrinder.util.RootUtil;
 import io.benwiegand.projection.geargrinder.util.UiUtil;
 
 public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback {
@@ -36,8 +33,9 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     private MakeshiftBind makeshiftBind;
 
     private final List<VirtualActivity> virtualActivities = new ArrayList<>();
-    private InputEventMuxer inputEventMuxer;
     private RootShell rootShell = null;
+
+    private PrivdService.ServiceBinder privdServiceBinder = null;   // use getPrivd()
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -77,22 +75,16 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
             Log.e(TAG, "failed to launch root shell", e);
         }
 
-        inputEventMuxer = new InputEventMuxer((event, translator) -> {
-            try {
-                if (rootShell == null) return;
-                RootUtil.simulateTouchEventRoot(rootShell, getDisplayId(this), event, translator);
-            } catch (IOException e) {
-                Log.e(TAG, "failed to simulate touch", e);
-            }
-        });
-
         makeshiftBind = new MakeshiftBind(this, new ComponentName(this, ProjectionActivity.class), this);
+        bindService(new Intent(this, PrivdService.class), serviceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
+
+        unbindService(serviceConnection);
 
         for (VirtualActivity virtualActivity : virtualActivities)
             virtualActivity.destroy();
@@ -107,7 +99,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         try {
             if (rootShell == null) return;
             Log.i(TAG, "launching virtual activity: " + componentName);
-            VirtualActivity virtualActivity = new VirtualActivity(rootShell, inputEventMuxer, componentName, splitScreenLayout);
+            VirtualActivity virtualActivity = new VirtualActivity(rootShell, componentName, splitScreenLayout, this::getPrivd);
             View view = virtualActivity.getRootView();
 
             virtualActivities.add(virtualActivity);
@@ -134,6 +126,30 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         return binder;
     }
 
+    private Optional<PrivdService.ServiceBinder> getPrivd() {
+        return Optional.ofNullable(privdServiceBinder);
+    }
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            Log.i(TAG, "connected " + name.getShortClassName());
+            privdServiceBinder = (PrivdService.ServiceBinder) service;
+            try {
+                privdServiceBinder.launchDaemon();
+            } catch (IOException e) {
+                // TODO
+                Log.e(TAG, "failed to launch privd", e);
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.i(TAG, "disconnected " + name.getShortClassName());
+            privdServiceBinder = null;
+        }
+    };
+
     public class ActivityBinder extends Binder {
 
         public void setMargins(int horizontal, int vertical) {
@@ -146,10 +162,6 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
                         vertical - vertical / 2
                 );
             });
-        }
-
-        public InputEventListener getInputEventListener() {
-            return inputEventMuxer;
         }
 
     }
