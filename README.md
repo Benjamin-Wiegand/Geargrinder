@@ -59,6 +59,7 @@ Currently, your phone must natively support the audio sample rate for your headu
 - Video
 - Audio
 - Touch Input
+- Multitouch
 - Basic UI
 
 
