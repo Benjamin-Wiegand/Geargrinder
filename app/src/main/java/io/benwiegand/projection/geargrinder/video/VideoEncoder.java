@@ -15,7 +15,12 @@ import java.nio.ByteBuffer;
 
 public class VideoEncoder {
     private static final String TAG = VideoEncoder.class.getSimpleName();
-    
+
+    /**
+     * minimum number of duplicate frames to send after video output stops changing
+     */
+    private static final int MIN_DUPLICATE_FRAMES = 10;
+
     private static final boolean LOG_FRAME_SIZE_DEBUG = true;
 
     private static final int I_FRAME_INTERVAL = 5;
@@ -34,6 +39,7 @@ public class VideoEncoder {
 
     private MediaCodec encoder = null;
     private Surface hardwareSurface = null;
+    private FrameCopier frameCopier = null;
 
     private final int width;
     private final int height;
@@ -44,6 +50,9 @@ public class VideoEncoder {
     private float targetBitrateMargin = BITRATE_MARGIN_MAX;
 
     private boolean dropUntilSync = false;
+
+    private int lastFrameNumber = -1;
+    private int duplicateFrames = 0;
 
     private final MediaCodec.BufferInfo bufferInfo;
 
@@ -59,8 +68,6 @@ public class VideoEncoder {
     }
 
     public void init() throws IOException {
-        // TODO: fix slow motion bug on some phones at 30 fps
-        //       I think I need to use a SurfaceTexture
 
         MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
 //        MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, width, height);   // TODO: figure out how to determine support for this
@@ -71,11 +78,7 @@ public class VideoEncoder {
         format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline);
         format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31);
         format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
-
         format.setInteger(MediaFormat.KEY_LATENCY, 1);
-        format.setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100000); // TODO
-        format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1);
-
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             format.setInteger(MediaFormat.KEY_VIDEO_QP_P_MIN, 30);
@@ -131,6 +134,23 @@ public class VideoEncoder {
         encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         hardwareSurface = encoder.createInputSurface();
         encoder.start();
+
+        try {
+
+            frameCopier = new OpenGLFrameCopier(width, height, hardwareSurface);
+            try {
+                frameCopier.init();
+            } catch (Throwable t) {
+                frameCopier.destroy();
+                throw t;
+            }
+
+        } catch (Throwable t) {
+            Log.e(TAG, "failed to init OpenGLFrameCopier", t);
+
+            Log.w(TAG, "falling back to FramePassthrough!");
+            frameCopier = new FramePassthrough(hardwareSurface);
+        }
     }
 
     public void destroy() {
@@ -138,10 +158,14 @@ public class VideoEncoder {
             encoder.stop();
             encoder.release();
         }
+
+        if (frameCopier != null) {
+            frameCopier.destroy();
+        }
     }
 
     public Surface getInputSurface() {
-        return hardwareSurface;
+        return frameCopier.getInputSurface();
     }
 
     private int getTargetBitrate() {
@@ -207,8 +231,19 @@ public class VideoEncoder {
         public FrameError error = FrameError.NO_ERROR;
     }
 
-    public void getFrame(FrameResult result, byte[] buffer, int offset, long timeoutUs) {
+    public void getFrame(FrameResult result, byte[] buffer, int offset, long timeoutUs) throws InterruptedException {
+        if (frameCopier.nextFrameNumber() == lastFrameNumber) {
+            if (duplicateFrames >= MIN_DUPLICATE_FRAMES) {
+                result.error = FrameError.NO_FRAME;
+                return;
+            }
 
+            duplicateFrames++;
+        } else {
+            duplicateFrames = 0;
+        }
+
+        lastFrameNumber = frameCopier.copyFrame();
         int index = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs);
         if (index < 0) {
             switch (index) {

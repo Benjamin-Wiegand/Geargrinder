@@ -78,12 +78,4 @@
 
     </LinearLayout>
 
-    <!-- TODO: stupid temporary fix for decoder buffer -->
-    <ProgressBar
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
-        android:indeterminate="true"
-        />
-
 </LinearLayout>
