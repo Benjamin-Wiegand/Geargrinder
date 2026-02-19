@@ -12,11 +12,12 @@ import java.io.IOException;
 import java.net.Socket;
 
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedIActivityManager;
+import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedInputEvent;
 import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
+import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 import io.benwiegand.projection.libprivd.data.IntResult;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedInputManager;
-import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 import io.benwiegand.projection.libprivd.ipc.IPCConnection;
 import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 
@@ -56,12 +57,23 @@ public class AppIPCConnection extends IPCConnection {
                 yield new Reply(IPCConstants.REPLY_SUCCESS);
             }
             case IPCConstants.COMMAND_INJECT_MOTION_EVENT -> {
-                Log.d(TAG, "inject motion event");
+                InjectMotionEventParams params = unmarshallParcelable(InjectMotionEventParams.CREATOR, data, offset, length);
+                Log.d(TAG, "inject motion event: " + params);
 
                 boolean result;
                 try {
-                    SerializableMotionEvent sme = SerializableMotionEvent.fromByteArray(data, offset, length);
-                    MotionEvent event = sme.toMotionEvent();
+                    MotionEvent event = params.getEvent();
+
+                    if (!params.isDisplayIdSet()) {
+                        try {
+                            ReflectedInputEvent rEvent = new ReflectedInputEvent(event);
+                            rEvent.setDisplayId(params.getDisplayId());
+                        } catch (ReflectionException e) {
+                            Log.e(TAG, "failed to set display id", e);
+                            yield new Reply(IPCConstants.REPLY_FAILURE);
+                        }
+                    }
+
                     result = rim.injectInputEvent(event, ReflectedInputManager.INJECT_MODE_ASYNC);
                 } catch (ReflectionException e) {
                     Log.e(TAG, "reflection exception while injecting input event", e);

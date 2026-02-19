@@ -17,8 +17,8 @@ import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
 import io.benwiegand.projection.geargrinder.privileged.RootPrivdLauncher;
 import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
+import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 import io.benwiegand.projection.libprivd.data.IntResult;
-import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 import io.benwiegand.projection.libprivd.sec.Sec;
 
@@ -107,12 +107,12 @@ public class PrivdService extends Service implements IPCConnectionListener {
             }
         }
 
-        public Sec<Boolean> injectMotionEvent(SerializableMotionEvent motionEvent) {
+        public Sec<Boolean> injectMotionEvent(InjectMotionEventParams params) {
             synchronized (lock) {
                 if (connection == null)
                     return Sec.premeditatedError(new IOException("daemon not connected"));
 
-                return connection.send(IPCConstants.COMMAND_INJECT_MOTION_EVENT, motionEvent)
+                return connection.send(IPCConstants.COMMAND_INJECT_MOTION_EVENT, params)
                         .map(r -> switch (r.status) {
                             case IPCConstants.REPLY_SUCCESS -> r.data[0] != 0;
                             case IPCConstants.REPLY_FAILURE -> throw new RuntimeException("got REPLY_FAILURE from daemon");

@@ -26,7 +26,7 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoP
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
-import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
+import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 
 public class ProjectionService implements InputEventConverter.ConvertedInputEventListener {
     private static final String TAG = ProjectionService.class.getSimpleName();
@@ -93,9 +93,9 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     }
 
     @Override
-    public void onMotionEvent(SerializableMotionEvent event) {
+    public void onMotionEvent(InjectMotionEventParams params) {
         getPrivd()
-                .map(privd -> privd.injectMotionEvent(event))
+                .map(privd -> privd.injectMotionEvent(params))
                 .ifPresent(sec -> sec
                         .doOnResult(r -> {
                             if (r) return;

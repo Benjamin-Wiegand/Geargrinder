@@ -1,11 +1,11 @@
-package io.benwiegand.projection.libprivd.reflected;
+package io.benwiegand.projection.geargrinder.privd.reflected;
 
 import android.view.InputEvent;
 
 import java.lang.reflect.Method;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedObject;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedObject;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public class ReflectedInputEvent extends ReflectedObject {
     private final Method setDisplayId;

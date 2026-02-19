@@ -12,7 +12,7 @@ import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 import io.benwiegand.projection.geargrinder.privd.ipc.IPCClient;
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedActivityThread;
 import io.benwiegand.projection.libprivd.ipc.IPCConnection;

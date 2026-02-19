@@ -8,8 +8,8 @@ import android.os.IInterface;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedAidlInterface;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedAidlInterface;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public class ReflectedIActivityManager extends ReflectedAidlInterface {
     private static final String CLASS_NAME = "android.app.ActivityManagerNative";

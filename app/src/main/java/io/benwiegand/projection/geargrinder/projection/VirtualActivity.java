@@ -24,7 +24,7 @@ import java.io.IOException;
 import io.benwiegand.projection.geargrinder.PrivdService;
 import io.benwiegand.projection.geargrinder.R;
 import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
-import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
+import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 
 public class VirtualActivity implements SurfaceHolder.Callback {
     private static final String TAG = VirtualActivity.class.getSimpleName();
@@ -161,7 +161,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     private boolean onMotionEvent(View view, MotionEvent event) {
-        privd.injectMotionEvent(SerializableMotionEvent.fromMotionEvent(event, getDisplayId()))
+        privd.injectMotionEvent(new InjectMotionEventParams(event, getDisplayId()))
                 .doOnResult(r -> {
                     if (r) return;
                     Log.w(TAG, "motion event result = false");

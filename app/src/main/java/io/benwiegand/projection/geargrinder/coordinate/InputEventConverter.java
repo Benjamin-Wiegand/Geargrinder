@@ -12,7 +12,7 @@ import java.util.Map;
 import io.benwiegand.projection.geargrinder.callback.InputEventListener;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
-import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
+import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 
 /**
  * converts {@link io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent} objects to {@link io.benwiegand.projection.libprivd.data.SerializableMotionEvent}.
@@ -23,19 +23,15 @@ public class InputEventConverter implements InputEventListener {
 
 
     private static final float TOUCH_PRESSURE = 1;      // normal pressure
-    private static final float TOUCH_SIZE = 0.5f;       // on a scale of 0-1
-    private static final float TOUCH_ORIENTATION = 0;   // 0 radians
+    private static final float TOUCH_SIZE = 1f;         // on a scale of 0-1
 
     private static final int TOUCH_TOOL_TYPE = MotionEvent.TOOL_TYPE_FINGER;
     private static final int TOUCH_SOURCE = InputDevice.SOURCE_TOUCHSCREEN;
     private static final int TOUCH_DEVICE_ID = 0;   // not from a device
 
     // not supported
-    private static final int DEFAULT_TOUCH_CLASSIFICATION = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ? MotionEvent.CLASSIFICATION_NONE : 0;
     private static final int DEFAULT_TOUCH_FLAGS = 0;
     private static final int DEFAULT_TOUCH_EDGE_FLAGS = 0;
-    private static final float DEFAULT_TOUCH_TOOL_MAJOR = 0;
-    private static final float DEFAULT_TOUCH_TOOL_MINOR = 0;
 
 
     private final Map<Integer, TouchEvent.PointerLocation> mostRecentPointerLocations = new HashMap<>(10);
@@ -63,7 +59,7 @@ public class InputEventConverter implements InputEventListener {
     }
 
     public interface ConvertedInputEventListener {
-        void onMotionEvent(SerializableMotionEvent event);
+        void onMotionEvent(InjectMotionEventParams params);
     }
 
     public void updateTouchPrecision() {
@@ -93,8 +89,8 @@ public class InputEventConverter implements InputEventListener {
             mostRecentPointerLocations.clear();
         }
 
-        SerializableMotionEvent.PointerProperties[] pps = new SerializableMotionEvent.PointerProperties[event.pointerCount()];
-        SerializableMotionEvent.PointerCoords[] pcs = new SerializableMotionEvent.PointerCoords[event.pointerCount()];
+        MotionEvent.PointerProperties[] pps = new MotionEvent.PointerProperties[event.pointerCount()];
+        MotionEvent.PointerCoords[] pcs = new MotionEvent.PointerCoords[event.pointerCount()];
 
         for (int i = 0; i < event.pointerCount(); i++) {
             TouchEvent.PointerLocation pl = event.pointerLocations()[i];
@@ -102,40 +98,66 @@ public class InputEventConverter implements InputEventListener {
             int x = translator.translateX(pl), y = translator.translateY(pl);
             int xPrev = translator.translateX(plPrev), yPrev = translator.translateY(plPrev);
 
-            pps[i] = new SerializableMotionEvent.PointerProperties(pl.pointerIndex(), TOUCH_TOOL_TYPE);
-            pcs[i] = new SerializableMotionEvent.PointerCoords(
-                    x, y,
-                    TOUCH_PRESSURE,
-                    TOUCH_SIZE,
-                    DEFAULT_TOUCH_TOOL_MAJOR,
-                    DEFAULT_TOUCH_TOOL_MINOR,
-                    DEFAULT_TOUCH_TOOL_MAJOR,
-                    DEFAULT_TOUCH_TOOL_MINOR,
-                    TOUCH_ORIENTATION,
-                    x - xPrev, y - yPrev
-            );
+            MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
+            pp.clear();
+            pp.id = pl.pointerIndex();
+            pp.toolType = TOUCH_TOOL_TYPE;
 
+            MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
+            pc.clear();
+            pc.x = x;
+            pc.y = y;
+            pc.pressure = TOUCH_PRESSURE;
+            pc.size = TOUCH_SIZE;
+            pc.setAxisValue(MotionEvent.AXIS_RELATIVE_X, x - xPrev);
+            pc.setAxisValue(MotionEvent.AXIS_RELATIVE_Y, y - yPrev);
+
+            pps[i] = pp;
+            pcs[i] = pc;
             mostRecentPointerLocations.put(pl.pointerIndex(), pl);
         }
 
-        SerializableMotionEvent convertedEvent = new SerializableMotionEvent(
-                downTime,
-                timestamp,
-                event.actionInt(),
-                event.pointerCount(),
-                pps,
-                pcs,
-                0, 0,  // touch screen doesn't have buttons
-                xTouchPrecision,
-                yTouchPrecision,
-                TOUCH_DEVICE_ID,
-                DEFAULT_TOUCH_EDGE_FLAGS,
-                TOUCH_SOURCE,
-                targetDisplayId,
-                DEFAULT_TOUCH_FLAGS,
-                DEFAULT_TOUCH_CLASSIFICATION
-        );
+        InjectMotionEventParams params;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            MotionEvent motionEvent = MotionEvent.obtain(
+                    downTime,
+                    timestamp,
+                    event.actionInt(),
+                    event.pointerCount(),
+                    pps,
+                    pcs,
+                    0, 0,  // touch screen doesn't have buttons
+                    xTouchPrecision,
+                    yTouchPrecision,
+                    TOUCH_DEVICE_ID,
+                    DEFAULT_TOUCH_EDGE_FLAGS,
+                    TOUCH_SOURCE,
+                    targetDisplayId,
+                    DEFAULT_TOUCH_FLAGS,
+                    MotionEvent.CLASSIFICATION_NONE
+            );
 
-        listener.onMotionEvent(convertedEvent);
+            params = new InjectMotionEventParams(motionEvent);
+        } else {
+            MotionEvent motionEvent = MotionEvent.obtain(
+                    downTime,
+                    timestamp,
+                    event.actionInt(),
+                    event.pointerCount(),
+                    pps,
+                    pcs,
+                    0, 0,  // touch screen doesn't have buttons
+                    xTouchPrecision,
+                    yTouchPrecision,
+                    TOUCH_DEVICE_ID,
+                    DEFAULT_TOUCH_EDGE_FLAGS,
+                    TOUCH_SOURCE,
+                    DEFAULT_TOUCH_FLAGS
+            );
+
+            params = new InjectMotionEventParams(motionEvent, targetDisplayId);
+        }
+
+        listener.onMotionEvent(params);
     }
 }

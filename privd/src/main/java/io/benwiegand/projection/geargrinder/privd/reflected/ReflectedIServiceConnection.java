@@ -5,8 +5,8 @@ import android.os.IBinder;
 
 import java.lang.reflect.Method;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedInterface;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedInterface;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public abstract class ReflectedIServiceConnection extends ReflectedInterface {
     private static final String CLASS_NAME = "android.app.IServiceConnection";

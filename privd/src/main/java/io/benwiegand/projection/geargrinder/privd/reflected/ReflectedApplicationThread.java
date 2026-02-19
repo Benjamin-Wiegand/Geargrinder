@@ -1,7 +1,7 @@
 package io.benwiegand.projection.geargrinder.privd.reflected;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedObject;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedObject;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public class ReflectedApplicationThread extends ReflectedObject {
     private static final String CLASS_NAME = "android.app.ActivityThread$ApplicationThread";

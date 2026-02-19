@@ -5,8 +5,8 @@ import android.content.Context;
 
 import java.lang.reflect.Method;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedObject;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedObject;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public class ReflectedActivityThread extends ReflectedObject {
     private static final String CLASS_NAME = "android.app.ActivityThread";

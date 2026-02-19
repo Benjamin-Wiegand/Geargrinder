@@ -1,4 +1,4 @@
-package io.benwiegand.projection.libprivd.reflection;
+package io.benwiegand.projection.geargrinder.privd.reflection;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;

@@ -6,8 +6,8 @@ import android.view.InputEvent;
 
 import java.lang.reflect.Method;
 
-import io.benwiegand.projection.libprivd.reflection.ReflectedObject;
-import io.benwiegand.projection.libprivd.reflection.ReflectionException;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectedObject;
+import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
 
 public class ReflectedInputManager extends ReflectedObject {
     public static final int INJECT_MODE_ASYNC = 0;
