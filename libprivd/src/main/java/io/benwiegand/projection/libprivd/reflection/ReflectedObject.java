@@ -9,12 +9,16 @@ public abstract class ReflectedObject {
     private static final String TAG = ReflectedObject.class.getSimpleName();
 
     protected final Object instance;
-    private final Class<?> clazz;
+    protected final Class<?> clazz;
 
     protected ReflectedObject(Object instance, Class<?> clazz) {
         this.instance = instance;
         this.clazz = clazz;
-        assert instance.getClass().equals(clazz);
+        assert instance == null || instance.getClass().equals(clazz);
+    }
+
+    public Object getRawInstance() {
+        return instance;
     }
 
     protected static Class<?> findClass(String name) throws ReflectionException {
@@ -26,6 +30,31 @@ public abstract class ReflectedObject {
     }
 
     protected Method findMethod(String name, Class<?>... parameterTypes) {
+        return findMethod(clazz, name, parameterTypes);
+    }
+
+    protected Object invokeMethodNoException(Method method, Object... args) throws ReflectionException {
+        try {
+            return invokeMethod(method, args);
+        } catch (ReflectionException | RuntimeException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new ReflectionException("unexpected exception thrown by " + method.getName(), t);
+        }
+    }
+
+    protected Object invokeMethod(Method method, Object... args) throws Throwable {
+        if (method == null) throw new ReflectionException("method not available");
+        try {
+            return method.invoke(instance, args);
+        } catch (IllegalAccessException e) {
+            throw new ReflectionException(e);
+        } catch (InvocationTargetException e) {
+            throw e.getTargetException();
+        }
+    }
+
+    protected static Method findMethod(Class<?> clazz, String name, Class<?>... parameterTypes) {
         try {
             Method method = clazz.getDeclaredMethod(name, parameterTypes);
             method.setAccessible(true);
@@ -36,22 +65,20 @@ public abstract class ReflectedObject {
         }
     }
 
-    protected Object invokeMethodNoException(Method method, Object... args) throws ReflectionException {
-        if (method == null) throw new ReflectionException("method not available");
+    protected static Object invokeStaticMethodNoException(Method method, Object... args) throws ReflectionException {
         try {
-            return method.invoke(instance, args);
-        } catch (IllegalAccessException e) {
-            throw new ReflectionException(e);
-        } catch (InvocationTargetException e) {
-            if (e.getTargetException() instanceof RuntimeException re) throw re;
-            throw new ReflectionException("unexpected exception thrown by " + method.getName(), e.getTargetException());
+            return invokeStaticMethod(method, args);
+        } catch (ReflectionException | RuntimeException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new ReflectionException("unexpected exception thrown by " + method.getName(), t);
         }
     }
 
-    protected Object invokeMethod(Method method, Object... args) throws Throwable {
+    protected static Object invokeStaticMethod(Method method, Object... args) throws Throwable {
         if (method == null) throw new ReflectionException("method not available");
         try {
-            return method.invoke(instance, args);
+            return method.invoke(null, args);
         } catch (IllegalAccessException e) {
             throw new ReflectionException(e);
         } catch (InvocationTargetException e) {

@@ -25,6 +25,7 @@ import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftServiceConnec
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoPreset;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
+import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
 import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 
 public class ProjectionService implements InputEventConverter.ConvertedInputEventListener {
@@ -58,13 +59,6 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         );
 
         inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, virtualDisplay.getDisplay().getDisplayId(), videoPreset.width(), videoPreset.height());
-
-        // TODO
-        try {
-            new ProcessBuilder("su", "-c", "am start-activity --display " + virtualDisplay.getDisplay().getDisplayId() + " io.benwiegand.projection.geargrinder/.ProjectionActivity").start();
-        } catch (IOException e) {
-            Log.e(TAG, "failed to launch projection activity", e);
-        }
 
         MakeshiftServiceConnection.bindService(context, new ComponentName(context, AccessibilityInputService.class), serviceConnection);
         MakeshiftServiceConnection.bindService(context, new ComponentName(context, ProjectionActivity.class), serviceConnection);
@@ -115,6 +109,14 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical());
     }
 
+    private void onPrivdConnected(PrivdService.ServiceBinder privd) {
+        Log.d(TAG, "launching projection activity");
+        privd.launchActivity(new ActivityLaunchParams(
+                new ComponentName(context, ProjectionActivity.class),
+                virtualDisplay.getDisplay().getDisplayId()
+        ));
+    }
+
 
     private Optional<AccessibilityInputService.ServiceBinder> getAccessibilityBinder() {
         return Optional.ofNullable(accessibilityInputServiceBinder);
@@ -141,6 +143,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
                 case PrivdService.ServiceBinder binder -> {
                     privdServiceBinder = binder;
                     try {
+                        privdServiceBinder.addDaemonListener(connection -> onPrivdConnected(binder));
                         privdServiceBinder.launchDaemon();
                     } catch (IOException e) {
                         // TODO

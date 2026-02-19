@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -23,17 +24,15 @@ import java.util.Optional;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBindCallback;
 import io.benwiegand.projection.geargrinder.projection.VirtualActivity;
-import io.benwiegand.projection.geargrinder.shell.RootShell;
 import io.benwiegand.projection.geargrinder.util.UiUtil;
 
-public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback {
+public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback, VirtualActivity.VirtualActivityListener {
     private static final String TAG = ProjectionActivity.class.getSimpleName();
 
     private final ActivityBinder binder = new ActivityBinder();
     private MakeshiftBind makeshiftBind;
 
     private final List<VirtualActivity> virtualActivities = new ArrayList<>();
-    private RootShell rootShell = null;
 
     private PrivdService.ServiceBinder privdServiceBinder = null;   // use getPrivd()
 
@@ -69,12 +68,6 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
         });
 
-        try {
-            rootShell = new RootShell();
-        } catch (IOException e) {
-            Log.e(TAG, "failed to launch root shell", e);
-        }
-
         makeshiftBind = new MakeshiftBind(this, new ComponentName(this, ProjectionActivity.class), this);
         bindService(new Intent(this, PrivdService.class), serviceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
     }
@@ -90,35 +83,57 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
             virtualActivity.destroy();
 
         makeshiftBind.destroy();
-        if (rootShell != null) rootShell.destroy();
+    }
+
+    private void closeActivity(VirtualActivity virtualActivity) {
+        runOnUiThread(() -> {
+            ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
+            virtualActivities.remove(virtualActivity);
+            splitScreenLayout.removeView(virtualActivity.getRootView());
+            virtualActivity.destroy();
+        });
     }
 
 
     private void launchActivity(ComponentName componentName) {
-        ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
-        try {
-            if (rootShell == null) return;
-            Log.i(TAG, "launching virtual activity: " + componentName);
-            VirtualActivity virtualActivity = new VirtualActivity(rootShell, componentName, splitScreenLayout, this::getPrivd);
-            View view = virtualActivity.getRootView();
+        getPrivd().ifPresent(privd -> {
+            ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
+            try {
+                Log.i(TAG, "launching virtual activity: " + componentName);
 
-            virtualActivities.add(virtualActivity);
+                VirtualActivity virtualActivity = new VirtualActivity(privd, componentName, splitScreenLayout, this);
+                View view = virtualActivity.getRootView();
 
-            view.findViewById(R.id.virtual_activity_close_button).setOnClickListener(v -> {
-                virtualActivities.remove(virtualActivity);
-                splitScreenLayout.removeView(view);
-                virtualActivity.destroy();
-            });
+                virtualActivities.add(virtualActivity);
 
-            splitScreenLayout.addView(view, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        } catch (IOException | PackageManager.NameNotFoundException e) {
-            Log.e(TAG, "failed to launch virtual activity", e);
-        }
+                splitScreenLayout.addView(view, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+            } catch (IOException | PackageManager.NameNotFoundException e) {
+                Log.e(TAG, "failed to launch virtual activity", e);
+            }
+        });
     }
 
     private void launchActivity(String component) {
         // TODO: remove this
         launchActivity(ComponentName.unflattenFromString(component));
+    }
+
+    @Override
+    public void onVirtualActivityLaunched(VirtualActivity virtualActivity) {
+        // TODO
+    }
+
+    @Override
+    public void onVirtualActivityLaunchFailure(VirtualActivity virtualActivity) {
+        runOnUiThread(() -> {
+            Toast.makeText(this, R.string.failed_to_launch_app, Toast.LENGTH_SHORT).show();
+            closeActivity(virtualActivity);
+        });
+    }
+
+    @Override
+    public void onVirtualActivityCloseButton(VirtualActivity virtualActivity) {
+        closeActivity(virtualActivity);
     }
 
     @Override

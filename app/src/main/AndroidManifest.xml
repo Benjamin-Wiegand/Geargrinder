@@ -55,7 +55,7 @@
 
         <activity
             android:name=".ProjectionActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleInstance"
             android:taskAffinity="io.benwiegand.projection.geargrinder.Projection"
             android:theme="@style/Theme.Geargrinder.Projection"

@@ -20,12 +20,10 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import java.io.IOException;
-import java.util.Optional;
-import java.util.function.Supplier;
 
 import io.benwiegand.projection.geargrinder.PrivdService;
 import io.benwiegand.projection.geargrinder.R;
-import io.benwiegand.projection.geargrinder.shell.RootShell;
+import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
 import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 
 public class VirtualActivity implements SurfaceHolder.Callback {
@@ -34,7 +32,8 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private static final long SPLASH_SHOW_DURATION = 3000;
     private static final long SPLASH_ANIMATION_DURATION = 300;
 
-    private final Supplier<Optional<PrivdService.ServiceBinder>> privdGetter;
+    private final PrivdService.ServiceBinder privd;
+    private final VirtualActivityListener listener;
     private final VirtualDisplay virtualDisplay;
     private final int density;
     private int width;
@@ -43,9 +42,16 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private final View rootView;
     private final SurfaceView surfaceView;
 
+    public interface VirtualActivityListener {
+        void onVirtualActivityLaunched(VirtualActivity virtualActivity);
+        void onVirtualActivityLaunchFailure(VirtualActivity virtualActivity);
+        void onVirtualActivityCloseButton(VirtualActivity virtualActivity);
+    }
+
     @SuppressLint("ClickableViewAccessibility")
-    public VirtualActivity(RootShell rootShell, ComponentName componentName, ViewGroup parent, Supplier<Optional<PrivdService.ServiceBinder>> privdGetter) throws IOException, PackageManager.NameNotFoundException {
-        this.privdGetter = privdGetter;
+    public VirtualActivity(PrivdService.ServiceBinder privd, ComponentName componentName, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
+        this.privd = privd;
+        this.listener = listener;
         density = parent.getResources().getDisplayMetrics().densityDpi;
         Context context = parent.getContext();
         DisplayManager dm = context.getSystemService(DisplayManager.class);
@@ -60,15 +66,6 @@ public class VirtualActivity implements SurfaceHolder.Callback {
                 null, DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
         );
 
-        // TODO
-        try {
-            // launch
-            rootShell.writeLine("am start-activity --display " + virtualDisplay.getDisplay().getDisplayId() + " " + componentName.flattenToShortString());
-        } catch (Throwable t) {
-            virtualDisplay.release();
-            throw t;
-        }
-
         // view
         rootView = inflater.inflate(R.layout.layout_virtual_activity, parent, false);
         surfaceView = rootView.findViewById(R.id.virtual_activity_surface);
@@ -80,11 +77,28 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         ImageView iconView = rootView.findViewById(R.id.virtual_activity_icon);
         iconView.setImageDrawable(pm.getApplicationIcon(activityInfo.applicationInfo));
 
+        rootView.findViewById(R.id.virtual_activity_close_button)
+                .setOnClickListener(v -> listener.onVirtualActivityCloseButton(this));
+
         // touch
         surfaceView.getViewTreeObserver().addOnGlobalLayoutListener(() ->
                 onLayoutUpdated(surfaceView.getWidth(), surfaceView.getHeight()));
         surfaceView.setOnTouchListener(this::onMotionEvent);
         surfaceView.setOnGenericMotionListener(this::onMotionEvent);
+
+        // launch
+        privd.launchActivity(new ActivityLaunchParams(componentName, getDisplayId()))
+                .doOnResult(r -> {
+                    Log.d(TAG, "launch result: " + r);
+                    Log.v(TAG, "successfully launched virtual activity component: " + componentName);
+                    listener.onVirtualActivityLaunched(this);
+                })
+                .doOnError(t -> {
+                    Log.e(TAG, "failed to launch virtual activity component: " + componentName, t);
+                    listener.onVirtualActivityLaunchFailure(this);
+                })
+                .callMeWhenDone();
+
     }
 
     public void destroy() {
@@ -147,15 +161,13 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     private boolean onMotionEvent(View view, MotionEvent event) {
-        privdGetter.get()
-                .map(privd -> privd.injectMotionEvent(SerializableMotionEvent.fromMotionEvent(event, getDisplayId())))
-                .ifPresent(sec -> sec
-                        .doOnResult(r -> {
-                            if (r) return;
-                            Log.w(TAG, "motion event result = false");
-                        })
-                        .doOnError(t -> Log.e(TAG, "failed to inject motion event", t))
-                        .callMeWhenDone());
+        privd.injectMotionEvent(SerializableMotionEvent.fromMotionEvent(event, getDisplayId()))
+                .doOnResult(r -> {
+                    if (r) return;
+                    Log.w(TAG, "motion event result = false");
+                })
+                .doOnError(t -> Log.e(TAG, "failed to inject motion event", t))
+                .callMeWhenDone();
         return true;
     }
 }

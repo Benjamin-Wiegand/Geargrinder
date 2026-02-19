@@ -1,5 +1,7 @@
 package io.benwiegand.projection.libprivd.ipc;
 
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -108,6 +110,10 @@ public abstract class IPCConnection {
             this(status, data, 0, data.length);
         }
 
+        public Reply(int status, Parcelable parcelable) {
+            this(status, marshallParcelable(parcelable));
+        }
+
         public Reply(int status) {
             this(status, new byte[0]);
         }
@@ -117,6 +123,10 @@ public abstract class IPCConnection {
             byte[] data = new byte[msg.getDataLength()];
             System.arraycopy(msg.getBuffer(), IPCMessage.HEADER_LENGTH, data, 0, data.length);
             return new Reply(msg.getCommand(), data);
+        }
+
+        public <T extends Parcelable> T unmarshallParcelableData(Parcelable.Creator<T> creator) {
+            return unmarshallParcelable(creator, data, offset, length);
         }
     }
 
@@ -129,6 +139,27 @@ public abstract class IPCConnection {
     protected abstract Reply onCommand(int command, byte[] data, int offset, int length);
 
     protected abstract void onClose();
+
+    public static byte[] marshallParcelable(Parcelable parcelable) {
+        Parcel parcel = Parcel.obtain();
+        try {
+            parcelable.writeToParcel(parcel, 0);
+            return parcel.marshall();
+        } finally {
+            parcel.recycle();
+        }
+    }
+
+    public static <T extends Parcelable> T unmarshallParcelable(Parcelable.Creator<T> creator, byte[] data, int offset, int length) {
+        Parcel parcel = Parcel.obtain();
+        try {
+            parcel.unmarshall(data, offset, length);
+            parcel.setDataPosition(0);
+            return creator.createFromParcel(parcel);
+        } finally {
+            parcel.recycle();
+        }
+    }
 
     public void waitForInit(long timeout) throws InterruptedException, TimeoutException {
         if (!initLatch.await(timeout, TimeUnit.MILLISECONDS)) {
@@ -182,6 +213,10 @@ public abstract class IPCConnection {
         }
 
         return send(command, data);
+    }
+
+    public Sec<Reply> send(int command, Parcelable parcelable) {
+        return send(command, marshallParcelable(parcelable));
     }
 
     public Sec<Reply> send(int command) {

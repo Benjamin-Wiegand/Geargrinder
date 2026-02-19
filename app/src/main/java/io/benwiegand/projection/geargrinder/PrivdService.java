@@ -9,10 +9,15 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.function.Consumer;
 
 import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
 import io.benwiegand.projection.geargrinder.privileged.RootPrivdLauncher;
+import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
+import io.benwiegand.projection.libprivd.data.IntResult;
 import io.benwiegand.projection.libprivd.data.SerializableMotionEvent;
 import io.benwiegand.projection.libprivd.ipc.IPCConstants;
 import io.benwiegand.projection.libprivd.sec.Sec;
@@ -26,6 +31,8 @@ public class PrivdService extends Service implements IPCConnectionListener {
 
     private RootPrivdLauncher privdLauncher;
     private PrivdIPCConnection connection = null;
+
+    private final Queue<Consumer<PrivdIPCConnection>> ipcConnectionListeners = new LinkedList<>();
 
     @Override
     public void onCreate() {
@@ -63,6 +70,13 @@ public class PrivdService extends Service implements IPCConnectionListener {
         synchronized (lock) {
             Log.i(TAG, "IPC connected");
             this.connection = connection;
+
+            while (!ipcConnectionListeners.isEmpty()) {
+                Consumer<PrivdIPCConnection> listener = ipcConnectionListeners.poll();
+                if (listener == null) continue;
+                listener.accept(connection);
+            }
+
         }
     }
 
@@ -75,6 +89,16 @@ public class PrivdService extends Service implements IPCConnectionListener {
     }
 
     public class ServiceBinder extends Binder {
+
+        public void addDaemonListener(Consumer<PrivdIPCConnection> listener) {
+            synchronized (lock) {
+                if (connection != null && connection.isAlive()) {
+                    listener.accept(connection);
+                } else {
+                    ipcConnectionListeners.add(listener);
+                }
+            }
+        }
 
         public void launchDaemon() throws IOException {
             synchronized (lock) {
@@ -91,6 +115,20 @@ public class PrivdService extends Service implements IPCConnectionListener {
                 return connection.send(IPCConstants.COMMAND_INJECT_MOTION_EVENT, motionEvent)
                         .map(r -> switch (r.status) {
                             case IPCConstants.REPLY_SUCCESS -> r.data[0] != 0;
+                            case IPCConstants.REPLY_FAILURE -> throw new RuntimeException("got REPLY_FAILURE from daemon");
+                            default -> throw new AssertionError("unexpected reply status from daemon: " + r.status);
+                        });
+            }
+        }
+
+        public Sec<Integer> launchActivity(ActivityLaunchParams params) {
+            synchronized (lock) {
+                if (connection == null)
+                    return Sec.premeditatedError(new IOException("daemon not connected"));
+
+                return connection.send(IPCConstants.COMMAND_LAUNCH_ACTIVITY, params)
+                        .map(r -> switch (r.status) {
+                            case IPCConstants.REPLY_SUCCESS -> r.unmarshallParcelableData(IntResult.CREATOR).getResult();
                             case IPCConstants.REPLY_FAILURE -> throw new RuntimeException("got REPLY_FAILURE from daemon");
                             default -> throw new AssertionError("unexpected reply status from daemon: " + r.status);
                         });

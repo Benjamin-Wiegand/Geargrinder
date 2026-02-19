@@ -66,9 +66,11 @@ public class Main {
 
         // context
         Looper.prepareMainLooper();
+        ReflectedActivityThread activityThread;
         Context context;
         try {
-            ReflectedActivityThread activityThread = new ReflectedActivityThread();
+            Log.i(TAG, "starting activity thread");
+            activityThread = ReflectedActivityThread.systemMain();
 
             context = activityThread.getSystemContext();
             Log.i(TAG, "got a system context: " + context);

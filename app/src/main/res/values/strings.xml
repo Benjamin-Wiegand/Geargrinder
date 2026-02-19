@@ -22,5 +22,6 @@
     <string name="close_button">close</string>
     <string name="cancel_button">cancel</string>
     <string name="launch_app">Launch app</string>
+    <string name="failed_to_launch_app">failed to launch app</string>
 
 </resources>
