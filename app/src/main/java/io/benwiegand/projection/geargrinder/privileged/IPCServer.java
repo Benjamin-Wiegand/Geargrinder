@@ -153,6 +153,7 @@ public class IPCServer {
 
     public PrivdIPCConnection getActiveConnection() {
         synchronized (connections) {
+            if (activeConnection == -1) return null;
             if (connections[activeConnection] == null) return null;
             if (!connections[activeConnection].isAlive()) return null;
             return connections[activeConnection];
