@@ -4,6 +4,7 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.InputDevice;
+import android.view.InputEvent;
 import android.view.MotionEvent;
 
 import java.util.HashMap;
@@ -12,10 +13,9 @@ import java.util.Map;
 import io.benwiegand.projection.geargrinder.callback.InputEventListener;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
-import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
 
 /**
- * converts {@link io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent} objects to {@link io.benwiegand.projection.libprivd.data.SerializableMotionEvent}.
+ * converts {@link TouchEvent} objects to {@link InputEvent}.
  * a whole class is needed for this since some values need to be calculated based on previous ones.
  */
 public class InputEventConverter implements InputEventListener {
@@ -59,7 +59,7 @@ public class InputEventConverter implements InputEventListener {
     }
 
     public interface ConvertedInputEventListener {
-        void onMotionEvent(InjectMotionEventParams params);
+        void onInputEvent(InputEvent event, int displayId, boolean displayIdSet);
     }
 
     public void updateTouchPrecision() {
@@ -117,7 +117,6 @@ public class InputEventConverter implements InputEventListener {
             mostRecentPointerLocations.put(pl.pointerIndex(), pl);
         }
 
-        InjectMotionEventParams params;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             MotionEvent motionEvent = MotionEvent.obtain(
                     downTime,
@@ -137,7 +136,7 @@ public class InputEventConverter implements InputEventListener {
                     MotionEvent.CLASSIFICATION_NONE
             );
 
-            params = new InjectMotionEventParams(motionEvent);
+            listener.onInputEvent(motionEvent, targetDisplayId, true);
         } else {
             MotionEvent motionEvent = MotionEvent.obtain(
                     downTime,
@@ -155,9 +154,7 @@ public class InputEventConverter implements InputEventListener {
                     DEFAULT_TOUCH_FLAGS
             );
 
-            params = new InjectMotionEventParams(motionEvent, targetDisplayId);
+            listener.onInputEvent(motionEvent, targetDisplayId, false);
         }
-
-        listener.onMotionEvent(params);
     }
 }

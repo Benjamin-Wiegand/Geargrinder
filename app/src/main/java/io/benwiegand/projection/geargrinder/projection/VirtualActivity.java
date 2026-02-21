@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.os.RemoteException;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -22,9 +23,7 @@ import androidx.annotation.NonNull;
 import java.io.IOException;
 
 import io.benwiegand.projection.geargrinder.R;
-import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
-import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
-import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
+import io.benwiegand.projection.libprivd.IPrivd;
 
 public class VirtualActivity implements SurfaceHolder.Callback {
     private static final String TAG = VirtualActivity.class.getSimpleName();
@@ -32,7 +31,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private static final long SPLASH_SHOW_DURATION = 3000;
     private static final long SPLASH_ANIMATION_DURATION = 300;
 
-    private final PrivdIPCConnection privd;
+    private final IPrivd privd;
     private final ComponentName componentName;
     private final VirtualActivityListener listener;
     private final VirtualDisplay virtualDisplay;
@@ -44,13 +43,11 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private final SurfaceView surfaceView;
 
     public interface VirtualActivityListener {
-        void onVirtualActivityLaunched(VirtualActivity virtualActivity);
-        void onVirtualActivityLaunchFailure(VirtualActivity virtualActivity);
         void onVirtualActivityCloseButton(VirtualActivity virtualActivity);
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    public VirtualActivity(PrivdIPCConnection privd, ComponentName componentName, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
+    public VirtualActivity(IPrivd privd, ComponentName componentName, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
         this.privd = privd;
         this.componentName = componentName;
         this.listener = listener;
@@ -89,18 +86,12 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         surfaceView.setOnGenericMotionListener(this::onMotionEvent);
 
         // launch
-        privd.launchActivity(new ActivityLaunchParams(componentName, getDisplayId()))
-                .doOnResult(r -> {
-                    Log.d(TAG, "launch result: " + r);
-                    Log.v(TAG, "successfully launched virtual activity component: " + componentName);
-                    listener.onVirtualActivityLaunched(this);
-                })
-                .doOnError(t -> {
-                    Log.e(TAG, "failed to launch virtual activity component: " + componentName, t);
-                    listener.onVirtualActivityLaunchFailure(this);
-                })
-                .callMeWhenDone();
-
+        try {
+            int result = privd.launchActivity(componentName, getDisplayId());
+            Log.d(TAG, "launch result " + result + " for " + componentName.flattenToShortString());
+        } catch (Throwable t) {
+            throw new RuntimeException("failed to launch activity for virtual activity", t);
+        }
     }
 
     public void destroy() {
@@ -167,13 +158,11 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     private boolean onMotionEvent(View view, MotionEvent event) {
-        privd.injectMotionEvent(new InjectMotionEventParams(event, getDisplayId()))
-                .doOnResult(r -> {
-                    if (r) return;
-                    Log.w(TAG, "motion event result = false");
-                })
-                .doOnError(t -> Log.e(TAG, "failed to inject motion event", t))
-                .callMeWhenDone();
-        return true;
+        try {
+            return privd.injectInputEvent(event, getDisplayId());
+        } catch (Throwable t) {
+            Log.e(TAG, "failed to inject motion event", t);
+            return false;
+        }
     }
 }

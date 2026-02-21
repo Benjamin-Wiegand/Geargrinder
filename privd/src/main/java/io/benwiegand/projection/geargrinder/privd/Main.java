@@ -1,61 +1,62 @@
 package io.benwiegand.projection.geargrinder.privd;
 
-import static io.benwiegand.projection.libprivd.ipc.IPCConstants.COMMAND_PING;
-import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_PORT;
-import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN_A;
-import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN_B;
-import static io.benwiegand.projection.libprivd.ipc.IPCConstants.PING_INTERVAL;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.APP_PKG_NAME;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.ENV_TOKEN_PATH;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.INTENT_ACTION_BIND_PRIVD;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.INTENT_EXTRA_BINDER;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.INTENT_EXTRA_TOKEN;
+import static io.benwiegand.projection.libprivd.ipc.IPCConstants.TOKEN_LENGTH;
 
 import android.content.Context;
-import android.os.Handler;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+
 import io.benwiegand.projection.geargrinder.privd.reflection.ReflectionException;
-import io.benwiegand.projection.geargrinder.privd.ipc.IPCClient;
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedActivityThread;
-import io.benwiegand.projection.libprivd.ipc.IPCConnection;
 
 public class Main {
     private static final String TAG = "privd-" + Main.class.getSimpleName();
 
-    private static final long IPC_INIT_TIMEOUT = 5000;
-
-    private static void pingTask(Handler handler, IPCConnection connection) {
-        connection.send(COMMAND_PING)
-                .doOnResult(reply -> Log.i(TAG, "pong: " + reply.status))
-                .doOnError(t -> {
-                    Log.e(TAG, "failed to ping", t);
-                    System.exit(1);
-                })
-                .callMeWhenDone();
-
-        if (!handler.postDelayed(() -> pingTask(handler, connection), PING_INTERVAL)) {
-            Log.w(TAG, "failed to post next ping task, bailing");
-            System.exit(0);
-        }
-    }
-
     public static void main(String[] args) {
         Log.i(TAG, "Geargrinder privd");
 
-
         // env
-        int port;
-        byte[] tokenA;
-        byte[] tokenB;
+        byte[] token;
         try {
-            String portString = System.getenv(ENV_PORT);
-            String tokenAString = System.getenv(ENV_TOKEN_A);
-            String tokenBString = System.getenv(ENV_TOKEN_B);
+            String tokenPath = System.getenv(ENV_TOKEN_PATH);
+            String tokenString = System.getenv(ENV_TOKEN);
 
-            if (portString == null || tokenAString == null || tokenBString == null)
+            if (tokenString != null) {
+                token = Base64.decode(tokenString, 0);
+            } else if (tokenPath != null) {
+
+                Log.i(TAG, "reading token from " + tokenPath);
+                token = new byte[TOKEN_LENGTH];
+                int offset = 0;
+                int len;
+                try (FileInputStream is = new FileInputStream(tokenPath)) {
+                    do {
+                        len = is.read(token, offset, token.length - offset);
+                        if (len < 0) {
+                            Log.e(TAG, "token file missing " + (token.length - offset) + " bytes");
+                            throw new IOException("unexpected end of stream");
+                        }
+
+                        offset += len;
+                    } while (offset < token.length);
+                }
+
+            } else {
                 throw new AssertionError("missing required environment variable(s)");
-
-            port = Integer.parseInt(portString);
-            tokenA = Base64.decode(tokenAString, 0);
-            tokenB = Base64.decode(tokenBString, 0);
+            }
 
         } catch (Throwable t) {
             Log.e(TAG, "failed to parse environment", t);
@@ -72,8 +73,10 @@ public class Main {
             Log.i(TAG, "starting activity thread");
             activityThread = ReflectedActivityThread.systemMain();
 
-            context = activityThread.getSystemContext();
-            Log.i(TAG, "got a system context: " + context);
+            Context systemContext = activityThread.getSystemContext();
+            Log.i(TAG, "got a system context: " + systemContext);
+
+            context = new FakeContext(systemContext);
 
         } catch (ReflectionException e) {
             Log.e(TAG, "failed to get system context", e);
@@ -81,28 +84,37 @@ public class Main {
             return;
         }
 
-
-        // ipc
-        IPCClient ipcClient;
-        IPCConnection connection;
+        // binder
+        PackageManager pm = context.getPackageManager();
+        int appUid;
         try {
-            ipcClient = new IPCClient(context, port, tokenA, tokenB);
-            connection = ipcClient.connect();
-            connection.waitForInit(IPC_INIT_TIMEOUT);
-        } catch (Throwable t) {
-            Log.e(TAG, "failed to open IPC connection", t);
+            appUid = pm.getPackageUid(APP_PKG_NAME, 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.e(TAG, "failed to get app UID", e);
             System.exit(1);
             return;
         }
 
+        Privd privd = new Privd(context, appUid);
 
-        // ping loop
-        Handler handler = new Handler(Looper.getMainLooper());
-        if (!handler.post(() -> pingTask(handler, connection))) {
-            Log.e(TAG, "failed to post ping task");
+        // bind broadcast intent
+        Bundle bundle = new Bundle();
+        bundle.putByteArray(INTENT_EXTRA_TOKEN, token);
+        bundle.putBinder(INTENT_EXTRA_BINDER, privd);
+
+        Intent intent = new Intent(INTENT_ACTION_BIND_PRIVD)
+                .setPackage(APP_PKG_NAME)
+                .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                .putExtras(bundle);
+
+        try {
+            Log.i(TAG, "sending bind broadcast");
+            activityThread.getApplication().sendBroadcast(intent);
+        } catch (ReflectionException e) {
+            Log.e(TAG, "failed to send bind broadcast", e);
             System.exit(1);
+            return;
         }
-
 
         // loop until death
         Looper.loop();

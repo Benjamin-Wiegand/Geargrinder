@@ -10,6 +10,7 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.os.IBinder;
 import android.util.Log;
+import android.view.InputEvent;
 import android.view.Surface;
 
 import java.util.Optional;
@@ -23,12 +24,10 @@ import io.benwiegand.projection.geargrinder.coordinate.CoordinateTranslator;
 import io.benwiegand.projection.geargrinder.coordinate.InputEventConverter;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftServiceConnection;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
-import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoPreset;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
-import io.benwiegand.projection.libprivd.data.ActivityLaunchParams;
-import io.benwiegand.projection.libprivd.data.InjectMotionEventParams;
+import io.benwiegand.projection.libprivd.IPrivd;
 
 public class ProjectionService implements InputEventConverter.ConvertedInputEventListener, IPCConnectionListener {
     private static final String TAG = ProjectionService.class.getSimpleName();
@@ -41,7 +40,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     private AccessibilityInputService.ServiceBinder accessibilityInputServiceBinder = null;
     private ProjectionActivity.ActivityBinder projectionActivityBinder = null;
     private PrivdService.ServiceBinder privdServiceBinder = null;
-    private PrivdIPCConnection privd = null;
+    private IPrivd privd = null;
 
     private final Context context;
     private final MessageBroker mb;
@@ -98,14 +97,13 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     }
 
     @Override
-    public void onMotionEvent(InjectMotionEventParams params) {
-        privd.injectMotionEvent(params)
-                .doOnResult(r -> {
-                    if (r) return;
-                    Log.w(TAG, "motion event result is false");
-                })
-                .doOnError(t -> Log.e(TAG, "failed to inject motion event", t))
-                .callMeWhenDone();
+    public void onInputEvent(InputEvent event, int displayId, boolean displayIdSet) {
+        try {
+            boolean result = displayIdSet ? privd.injectInputEvent(event) : privd.injectInputEvent(event, displayId);
+            if (!result) Log.w(TAG, "motion event result is false");
+        } catch (Throwable t) {
+            Log.e(TAG, "failed to inject motion event", t);
+        }
     }
 
     private void onProjectionActivityConnected(ProjectionActivity.ActivityBinder binder) {
@@ -113,14 +111,19 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     }
 
     @Override
-    public void onPrivdConnected(PrivdIPCConnection privd) {
+    public void onPrivdConnected(IPrivd privd) {
         this.privd = privd;
 
         Log.d(TAG, "launching projection activity");
-        privd.launchActivity(new ActivityLaunchParams(
-                new ComponentName(context, ProjectionActivity.class),
-                virtualDisplay.getDisplay().getDisplayId()
-        ));
+        try {
+            privd.launchActivity(
+                    new ComponentName(context, ProjectionActivity.class),
+                    virtualDisplay.getDisplay().getDisplayId()
+            );
+        } catch (Throwable t) {
+            Log.wtf(TAG, "failed to launch projection activity", t);
+            mb.closeConnection();
+        }
     }
 
     @Override
@@ -129,6 +132,12 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
         Log.wtf(TAG, "privd connection lost, bailing");
         mb.closeConnection();
+    }
+
+    @Override
+    public void onPrivdLaunchFailure(Throwable t) {
+        // TODO: do something about this
+        onPrivdDisconnected();
     }
 
 
@@ -152,7 +161,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
                 }
                 case PrivdService.ServiceBinder binder -> {
                     privdServiceBinder = binder;
-                    privdServiceBinder.addDaemonListener(ProjectionService.this);
+                    privdServiceBinder.requestDaemon(ProjectionService.this);
                 }
                 default -> Log.wtf(TAG, "unhandled binder type", new RuntimeException());
             }

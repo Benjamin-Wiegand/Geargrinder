@@ -25,10 +25,10 @@ import java.util.Map;
 import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBindCallback;
-import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
 import io.benwiegand.projection.geargrinder.projection.VirtualActivity;
 import io.benwiegand.projection.geargrinder.ui.AppDock;
 import io.benwiegand.projection.geargrinder.util.UiUtil;
+import io.benwiegand.projection.libprivd.IPrivd;
 
 public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback, VirtualActivity.VirtualActivityListener, IPCConnectionListener, AppDock.AppDockListener {
     private static final String TAG = ProjectionActivity.class.getSimpleName();
@@ -41,7 +41,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     private AppDock appDock;
 
     private PrivdService.ServiceBinder privdServiceBinder = null;
-    private PrivdIPCConnection privd = null;
+    private IPrivd privd = null;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -151,6 +151,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
             splitScreenLayout.addView(rootView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         } catch (IOException | PackageManager.NameNotFoundException e) {
             Log.e(TAG, "failed to launch virtual activity", e);
+            Toast.makeText(this, R.string.failed_to_launch_app, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -176,19 +177,6 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     }
 
     @Override
-    public void onVirtualActivityLaunched(VirtualActivity virtualActivity) {
-        // TODO
-    }
-
-    @Override
-    public void onVirtualActivityLaunchFailure(VirtualActivity virtualActivity) {
-        runOnUiThread(() -> {
-            Toast.makeText(this, R.string.failed_to_launch_app, Toast.LENGTH_SHORT).show();
-            closeActivity(virtualActivity);
-        });
-    }
-
-    @Override
     public void onVirtualActivityCloseButton(VirtualActivity virtualActivity) {
         closeActivity(virtualActivity);
     }
@@ -207,8 +195,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     }
 
     @Override
-    public void onPrivdConnected(PrivdIPCConnection connection) {
-        privd = connection;
+    public void onPrivdConnected(IPrivd privd) {
+        this.privd = privd;
     }
 
     @Override
@@ -216,6 +204,12 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         if (isFinishing() || isDestroyed()) return;
         Log.wtf(TAG, "privd connection lost, finishing");
         finish();
+    }
+
+    @Override
+    public void onPrivdLaunchFailure(Throwable t) {
+        // TODO: show error
+        onPrivdDisconnected();
     }
 
     @Override
@@ -228,7 +222,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.i(TAG, "connected " + name.getShortClassName());
             privdServiceBinder = (PrivdService.ServiceBinder) service;
-            privdServiceBinder.addDaemonListener(ProjectionActivity.this);
+            privdServiceBinder.requestDaemon(ProjectionActivity.this);
         }
 
         @Override

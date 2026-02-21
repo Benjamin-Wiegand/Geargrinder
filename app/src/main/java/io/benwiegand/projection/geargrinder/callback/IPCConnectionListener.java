@@ -1,8 +1,9 @@
 package io.benwiegand.projection.geargrinder.callback;
 
-import io.benwiegand.projection.geargrinder.privileged.PrivdIPCConnection;
+import io.benwiegand.projection.libprivd.IPrivd;
 
 public interface IPCConnectionListener {
-    void onPrivdConnected(PrivdIPCConnection connection);
+    void onPrivdConnected(IPrivd privd);
     void onPrivdDisconnected();
+    void onPrivdLaunchFailure(Throwable t);
 }
