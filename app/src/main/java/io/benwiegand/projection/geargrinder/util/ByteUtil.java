@@ -8,13 +8,13 @@ public class ByteUtil {
     public static String hexDump(byte[] buffer, int offset, int length, String separator, boolean upper) {
         char[] digits = upper ? HEX_DIGITS_UPPER : HEX_DIGITS;
 
-        StringBuilder sb = new StringBuilder((length - offset) * (2 + separator.length()));
-        for (int i = offset; i < length; i++) {
+        StringBuilder sb = new StringBuilder(length * (2 + separator.length()));
+        for (int i = offset; i < offset + length; i++) {
             byte b = buffer[i];
             sb.append(digits[(0xF0 & b) >>> 4])
                     .append(digits[0x0F & b]);
 
-            if (i != (buffer.length - offset) - 1) sb.append(separator);
+            if (i != (length - offset) - 1) sb.append(separator);
         }
 
         return sb.toString();
