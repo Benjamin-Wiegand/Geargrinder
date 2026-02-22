@@ -1,91 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    >
+    android:layout_height="match_parent">
 
-    <FrameLayout
+    <LinearLayout
+        android:id="@+id/projection_root"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
         >
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            >
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_gravity="center"
+                android:layout_margin="12dp"
+                >
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:autoSizeTextType="uniform"
+                    android:text="@string/app_name"
+                    android:gravity="center"
+                    android:autoSizeMaxTextSize="48sp"
+                    android:lines="1"
+                    style="@style/TextAppearance.MaterialComponents.Headline1"
+                    />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0"
+                    android:text="@string/experimental_app_warning"
+                    android:gravity="center"
+                    style="@style/TextAppearance.MaterialComponents.Body1"
+                    />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/split_screen_layout"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                />
+
+        </FrameLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_gravity="center"
-            android:layout_margin="12dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp"
+            android:background="@color/black"
             >
 
-            <TextView
-                android:layout_width="match_parent"
+            <include
+                android:id="@+id/app_dock"
+                layout="@layout/layout_dock"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:autoSizeTextType="uniform"
-                android:text="@string/app_name"
-                android:gravity="center"
-                android:autoSizeMaxTextSize="48sp"
-                android:lines="1"
-                style="@style/TextAppearance.MaterialComponents.Headline1"
                 />
 
-            <TextView
-                android:layout_width="match_parent"
+            <ImageButton
+                android:id="@+id/edit_layout_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_menu_crop"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                />
+
+            <TextClock
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="0"
-                android:text="@string/experimental_app_warning"
-                android:gravity="center"
-                style="@style/TextAppearance.MaterialComponents.Body1"
+                android:layout_marginHorizontal="8dp"
+                style="@style/TextAppearance.MaterialComponents.Headline6"
+                android:textColor="@color/white"
                 />
 
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/split_screen_layout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="horizontal"
-            />
-
-    </FrameLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="8dp"
-        android:background="@color/black"
-        >
-
-        <include
-            android:id="@+id/app_dock"
-            layout="@layout/layout_dock"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            />
-
-        <ImageButton
-            android:id="@+id/edit_layout_button"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_crop"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            />
-
-        <TextClock
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="0"
-            android:layout_marginHorizontal="8dp"
-            style="@style/TextAppearance.MaterialComponents.Headline6"
-            android:textColor="@color/white"
-            />
-
     </LinearLayout>
 
-</LinearLayout>
+</FrameLayout>

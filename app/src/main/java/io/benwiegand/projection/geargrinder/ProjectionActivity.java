@@ -1,12 +1,15 @@
 package io.benwiegand.projection.geargrinder;
 
+import android.app.KeyguardManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 import android.view.DragEvent;
 import android.view.View;
@@ -27,11 +30,17 @@ import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBindCallback;
 import io.benwiegand.projection.geargrinder.projection.VirtualActivity;
 import io.benwiegand.projection.geargrinder.ui.AppDock;
+import io.benwiegand.projection.geargrinder.ui.ProjectionModal;
 import io.benwiegand.projection.geargrinder.util.UiUtil;
 import io.benwiegand.projection.libprivd.IPrivd;
 
 public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback, VirtualActivity.VirtualActivityListener, IPCConnectionListener, AppDock.AppDockListener {
     private static final String TAG = ProjectionActivity.class.getSimpleName();
+
+    // only happens while device is initially locked
+    private static final long KEYGUARD_LOCK_STATE_POLL_INTERVAL = 1000;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     private final ActivityBinder binder = new ActivityBinder();
     private MakeshiftBind makeshiftBind;
@@ -75,6 +84,41 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
         makeshiftBind = new MakeshiftBind(this, new ComponentName(this, ProjectionActivity.class), this);
         bindService(new Intent(this, PrivdService.class), serviceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
+
+
+        // screen lock
+        // only do this on init so the device can be re-locked (like AA)
+        KeyguardManager km = getSystemService(KeyguardManager.class);
+        if (km.isKeyguardLocked()) {
+            Log.i(TAG, "device is locked, restricting projection");
+
+            ProjectionModal keyguardModal = new ProjectionModal(findViewById(R.id.root), true)
+                    .setTitle(R.string.keyguard_modal_title)
+                    .setMessage(R.string.keyguard_modal_instructions);
+
+            // for extra security
+            View projectionRoot = findViewById(R.id.projection_root);
+            projectionRoot.setVisibility(View.GONE);
+
+            // can't use callback without SUBSCRIBE_TO_KEYGUARD_LOCKED_STATE
+            Runnable pollKeyguardLockState = new Runnable() {
+                @Override
+                public void run() {
+                    if (!km.isKeyguardLocked()) {
+                        Log.i(TAG, "device unlocked");
+                        keyguardModal.close();
+                        projectionRoot.setVisibility(View.VISIBLE);
+                        return;
+                    }
+
+                    handler.postDelayed(this, KEYGUARD_LOCK_STATE_POLL_INTERVAL);
+                }
+            };
+
+            pollKeyguardLockState.run();
+
+        }
+
     }
 
     @Override

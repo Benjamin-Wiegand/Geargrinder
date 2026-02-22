@@ -25,5 +25,7 @@
     <string name="failed_to_launch_app">failed to launch app</string>
     <string name="app_drawer_button_content_description">app drawer</string>
     <string name="experimental_app_warning">EXPERIMENTAL. DO NOT USE WHILE DRIVING.</string>
+    <string name="keyguard_modal_title">Phone locked</string>
+    <string name="keyguard_modal_instructions">For security, please unlock your device to continue.</string>
 
 </resources>
