@@ -37,9 +37,9 @@ public class InputEventConverter implements InputEventListener {
     private final Map<Integer, TouchEvent.PointerLocation> mostRecentPointerLocations = new HashMap<>(10);
 
     private final ConvertedInputEventListener listener;
-    private final int targetDisplayId;
 
     private InputChannelMeta inputMeta;
+    private int targetDisplayId;
     private int displayWidth;
     private int displayHeight;
     private float xTouchPrecision;
@@ -60,6 +60,10 @@ public class InputEventConverter implements InputEventListener {
 
     public interface ConvertedInputEventListener {
         void onInputEvent(InputEvent event, int displayId, boolean displayIdSet);
+    }
+
+    public void setTargetDisplayId(int targetDisplayId) {
+        this.targetDisplayId = targetDisplayId;
     }
 
     public void updateTouchPrecision() {

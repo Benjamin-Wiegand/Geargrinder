@@ -68,8 +68,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         });
 
         appDock = new AppDock(findViewById(R.id.app_dock), this);
-        appDock.addApp(ComponentName.unflattenFromString("org.videolan.vlc/.gui.MainActivity"));
-//        appDock.addApp(ComponentName.unflattenFromString("org.videolan.vlc/.StartActivity"));
+        appDock.addApp(ComponentName.unflattenFromString("org.videolan.vlc/.StartActivity"));
         appDock.addApp(ComponentName.unflattenFromString("net.osmand.plus/.activities.MapActivity"));
 
         findViewById(R.id.root).getViewTreeObserver().addOnGlobalLayoutListener(this::onGlobalLayout);

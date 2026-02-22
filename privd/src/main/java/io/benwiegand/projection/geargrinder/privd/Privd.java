@@ -8,6 +8,8 @@ import android.app.ActivityOptions;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
 import android.hardware.input.InputManager;
 import android.os.Binder;
 import android.os.Build;
@@ -17,8 +19,12 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.InputEvent;
+import android.view.Surface;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedIActivityManager;
 import io.benwiegand.projection.geargrinder.privd.reflected.ReflectedInputEvent;
@@ -31,8 +37,10 @@ public class Privd extends IPrivd.Stub {
     private static final boolean LOG_DEBUG = true;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Map<Integer, VirtualDisplay> virtualDisplays = new ConcurrentHashMap<>();
 
     private final int appUid;
+    private final DisplayManager dm;
     private final ReflectedInputManager rim;
     private final ReflectedIActivityManager ram;
 
@@ -40,6 +48,9 @@ public class Privd extends IPrivd.Stub {
 
     public Privd(Context context, int appUid) {
         this.appUid = appUid;
+
+        dm = context.getSystemService(DisplayManager.class);
+
         InputManager im = context.getSystemService(InputManager.class);
         rim = new ReflectedInputManager(im);
 
@@ -59,6 +70,8 @@ public class Privd extends IPrivd.Stub {
             Log.e(TAG, "timed out waiting for app to bind");
             System.exit(1);
         }, BIND_TIMEOUT);
+
+
     }
 
     @Override
@@ -137,6 +150,55 @@ public class Privd extends IPrivd.Stub {
             Log.e(TAG, "interrupted");
             throw new RuntimeException("interrupted");
         }
+    }
+
+    private VirtualDisplay getVirtualDisplay(int displayId) {
+        VirtualDisplay virtualDisplay = virtualDisplays.get(displayId);
+        if (virtualDisplay == null) throw new NoSuchElementException("no registered VirtualDisplay exists with id " + displayId);
+        return virtualDisplay;
+    }
+
+    @Override
+    public int createVirtualDisplay(String name, int width, int height, int densityDpi, Surface surface, int flags) {
+        Log.v(TAG, "creating virtual display: " + name);
+
+        // TODO: doesn't work for shell (uid 2000)
+        VirtualDisplay virtualDisplay = dm.createVirtualDisplay(name, width, height, densityDpi, surface, flags);
+        if (virtualDisplay == null) throw new RuntimeException("createVirtualDisplay() returned null");
+
+        int displayId = virtualDisplay.getDisplay().getDisplayId();
+        Log.v(TAG, "created virtual display " + displayId + " with name: " + name);
+
+        virtualDisplays.put(displayId, virtualDisplay);
+        return displayId;
+    }
+
+    @Override
+    public void releaseVirtualDisplay(int displayId) {
+        Log.v(TAG, "releasing virtual display " + displayId);
+        VirtualDisplay virtualDisplay = virtualDisplays.remove(displayId);
+        if (virtualDisplay == null) {
+            Log.w(TAG, "can't release virtual display " + displayId + " because it doesn't exist or was already released");
+            return;
+        }
+
+        virtualDisplay.release();
+    }
+
+    @Override
+    public void virtualDisplayResize(int displayId, int width, int height, int densityDpi) {
+        Log.v(TAG, "resizing virtual display " + displayId + " to " + width + " x " + height + " with " + densityDpi + " dpi");
+
+        VirtualDisplay virtualDisplay = getVirtualDisplay(displayId);
+        virtualDisplay.resize(width, height, densityDpi);
+    }
+
+    @Override
+    public void virtualDisplaySetSurface(int displayId, Surface surface) {
+        Log.v(TAG, "setting new output surface for virtual display " + displayId);
+
+        VirtualDisplay virtualDisplay = getVirtualDisplay(displayId);
+        virtualDisplay.setSurface(surface);
     }
 
     @Override

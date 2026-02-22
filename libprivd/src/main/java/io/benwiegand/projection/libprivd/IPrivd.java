@@ -19,6 +19,14 @@ public interface IPrivd extends IInterface {
 
     int launchActivity(ComponentName component, int displayId) throws RemoteException;
 
+    int createVirtualDisplay(String name, int width, int height, int densityDpi, Surface surface, int flags) throws RemoteException;
+
+    void releaseVirtualDisplay(int displayId) throws RemoteException;
+
+    void virtualDisplayResize(int displayId, int width, int height, int densityDpi) throws RemoteException;
+
+    void virtualDisplaySetSurface(int displayId, Surface surface) throws RemoteException;
+
     static IPrivd fromBinder(IBinder binder) {
         return (IPrivd) ReflectingBinder.proxyInterface(binder, IPrivd.class);
     }

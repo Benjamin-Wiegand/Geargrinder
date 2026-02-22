@@ -7,7 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.InputEvent;
@@ -24,6 +23,9 @@ import io.benwiegand.projection.geargrinder.coordinate.CoordinateTranslator;
 import io.benwiegand.projection.geargrinder.coordinate.InputEventConverter;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftServiceConnection;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
+import io.benwiegand.projection.geargrinder.projection.display.LocalVirtualDisplayController;
+import io.benwiegand.projection.geargrinder.projection.display.PrivdVirtualDisplayProxy;
+import io.benwiegand.projection.geargrinder.projection.display.VirtualDisplayController;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoPreset;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
@@ -32,10 +34,28 @@ import io.benwiegand.projection.libprivd.IPrivd;
 public class ProjectionService implements InputEventConverter.ConvertedInputEventListener, IPCConnectionListener {
     private static final String TAG = ProjectionService.class.getSimpleName();
 
-    private final VirtualDisplay virtualDisplay;
+    private static final String VIRTUAL_DISPLAY_NAME = "Geargrinder projection";
+
+    // uses system/protected flags
+    private static final int PRIVD_VIRTUAL_DISPLAY_FLAGS = DisplayManager.VIRTUAL_DISPLAY_FLAG_SECURE
+            | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+            | PrivdVirtualDisplayProxy.FLAG_CAN_SHOW_WITH_INSECURE_KEYGUARD
+            | PrivdVirtualDisplayProxy.FLAG_SUPPORTS_TOUCH
+            | PrivdVirtualDisplayProxy.FLAG_TRUSTED
+            | PrivdVirtualDisplayProxy.FLAG_OWN_DISPLAY_GROUP
+            | PrivdVirtualDisplayProxy.FLAG_ALWAYS_UNLOCKED
+            | PrivdVirtualDisplayProxy.FLAG_OWN_FOCUS;
+
+    // this is all that really can be done
+    private static final int LOCAL_VIRTUAL_DISPLAY_FLAGS = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
+
+    private final Object lock = new Object();
+
     private final InputEventConverter inputEventConverter;
 
+    private VirtualDisplayController virtualDisplay = null;
     private VideoPreset videoPreset = VideoPreset.getDefault();
+    private Surface surface = null;
 
     private AccessibilityInputService.ServiceBinder accessibilityInputServiceBinder = null;
     private ProjectionActivity.ActivityBinder projectionActivityBinder = null;
@@ -53,16 +73,8 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     public ProjectionService(Context context, MessageBroker mb) {
         this.context = context;
         this.mb = mb;
-        DisplayManager dm = context.getSystemService(DisplayManager.class);
-        virtualDisplay = dm.createVirtualDisplay(
-                "Geargrinder projection",
-                videoPreset.width(),
-                videoPreset.height(),
-                videoPreset.density(),
-                null, DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
-        );
 
-        inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, virtualDisplay.getDisplay().getDisplayId(), videoPreset.width(), videoPreset.height());
+        inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, 0, videoPreset.width(), videoPreset.height());
 
         MakeshiftServiceConnection.bindService(context, new ComponentName(context, AccessibilityInputService.class), serviceConnection);
         MakeshiftServiceConnection.bindService(context, new ComponentName(context, ProjectionActivity.class), serviceConnection);
@@ -72,22 +84,31 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     public void destroy() {
         context.unbindService(serviceConnection);
         serviceConnection.destroy();
-        virtualDisplay.release();
+        if (virtualDisplay != null)
+            virtualDisplay.release();
     }
 
     public void setOutput(Surface surface, VideoPreset videoPreset) {
-        Log.i(TAG, "attaching new output");
-        if (!this.videoPreset.equals(videoPreset)) {
-            Log.d(TAG, "resizing to " + videoPreset.width() + " x " + videoPreset.height() + ", dpi = " + videoPreset.density());
-            virtualDisplay.resize(videoPreset.width(), videoPreset.height(), videoPreset.density());
-            inputEventConverter.setTargetDisplaySize(videoPreset.width(), videoPreset.height());
-            this.videoPreset = videoPreset;
+        synchronized (lock) {
+            Log.i(TAG, "attaching new output");
+            if (!this.videoPreset.equals(videoPreset)) {
+                Log.d(TAG, "resizing to " + videoPreset.width() + " x " + videoPreset.height() + ", dpi = " + videoPreset.density());
+
+                if (virtualDisplay != null)
+                    virtualDisplay.resize(videoPreset.width(), videoPreset.height(), videoPreset.density());
+
+                inputEventConverter.setTargetDisplaySize(videoPreset.width(), videoPreset.height());
+                getProjectionBinder()
+                        .ifPresent(binder -> binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical()));
+
+                this.videoPreset = videoPreset;
+            }
+
+            if (virtualDisplay != null)
+                virtualDisplay.setSurface(surface);
+
+            this.surface = surface;
         }
-
-        virtualDisplay.setSurface(surface);
-
-        getProjectionBinder()
-                .ifPresent(binder -> binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical()));
     }
 
     public void setInput(InputChannel inputChannel) {
@@ -98,6 +119,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
     @Override
     public void onInputEvent(InputEvent event, int displayId, boolean displayIdSet) {
+        if (virtualDisplay == null) return;
         try {
             boolean result = displayIdSet ? privd.injectInputEvent(event) : privd.injectInputEvent(event, displayId);
             if (!result) Log.w(TAG, "motion event result is false");
@@ -112,13 +134,40 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
     @Override
     public void onPrivdConnected(IPrivd privd) {
+        Log.i(TAG, "starting projection");
         this.privd = privd;
 
-        Log.d(TAG, "launching projection activity");
+        synchronized (lock) {
+            assert virtualDisplay == null;
+
+            try {
+                Log.d(TAG, "creating virtual display via privd");
+                virtualDisplay = new PrivdVirtualDisplayProxy(
+                        privd, VIRTUAL_DISPLAY_NAME,
+                        videoPreset.width(), videoPreset.height(), videoPreset.density(),
+                        surface, PRIVD_VIRTUAL_DISPLAY_FLAGS
+                );
+            } catch (Throwable t) {
+                Log.e(TAG, "failed to create virtual display via privd", t);
+
+                // this is less consequential for ProjectionService
+                Log.w(TAG, "falling back to local virtual display");
+                DisplayManager dm = context.getSystemService(DisplayManager.class);
+                virtualDisplay = new LocalVirtualDisplayController(
+                        dm, VIRTUAL_DISPLAY_NAME,
+                        videoPreset.width(), videoPreset.height(), videoPreset.density(),
+                        surface, LOCAL_VIRTUAL_DISPLAY_FLAGS
+                );
+            }
+
+            inputEventConverter.setTargetDisplayId(virtualDisplay.getDisplayId());
+        }
+
         try {
+            Log.d(TAG, "launching projection activity");
             privd.launchActivity(
                     new ComponentName(context, ProjectionActivity.class),
-                    virtualDisplay.getDisplay().getDisplayId()
+                    virtualDisplay.getDisplayId()
             );
         } catch (Throwable t) {
             Log.wtf(TAG, "failed to launch projection activity", t);
