@@ -3,7 +3,6 @@ package io.benwiegand.projection.geargrinder;
 import android.app.KeyguardManager;
 import android.content.ComponentName;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Bundle;
@@ -28,13 +27,16 @@ import java.util.Map;
 import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBindCallback;
+import io.benwiegand.projection.geargrinder.pm.AppCategory;
+import io.benwiegand.projection.geargrinder.pm.AppRecord;
 import io.benwiegand.projection.geargrinder.projection.VirtualActivity;
+import io.benwiegand.projection.geargrinder.service.GeargrinderServiceConnector;
 import io.benwiegand.projection.geargrinder.ui.AppDock;
 import io.benwiegand.projection.geargrinder.ui.ProjectionModal;
 import io.benwiegand.projection.geargrinder.util.UiUtil;
 import io.benwiegand.projection.libprivd.IPrivd;
 
-public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback, VirtualActivity.VirtualActivityListener, IPCConnectionListener, AppDock.AppDockListener {
+public class ProjectionActivity extends AppCompatActivity implements MakeshiftBindCallback, VirtualActivity.VirtualActivityListener, IPCConnectionListener, AppDock.AppDockListener, GeargrinderServiceConnector.ConnectionListener {
     private static final String TAG = ProjectionActivity.class.getSimpleName();
 
     // only happens while device is initially locked
@@ -49,7 +51,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
     private AppDock appDock;
 
-    private PrivdService.ServiceBinder privdServiceBinder = null;
+    private GeargrinderServiceConnector connector;
     private IPrivd privd = null;
 
     @Override
@@ -77,13 +79,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         });
 
         appDock = new AppDock(findViewById(R.id.app_dock), this);
-        appDock.addApp(ComponentName.unflattenFromString("org.videolan.vlc/.StartActivity"));
-        appDock.addApp(ComponentName.unflattenFromString("net.osmand.plus/.activities.MapActivity"));
 
         findViewById(R.id.root).getViewTreeObserver().addOnGlobalLayoutListener(this::onGlobalLayout);
-
-        makeshiftBind = new MakeshiftBind(this, new ComponentName(this, ProjectionActivity.class), this);
-        bindService(new Intent(this, PrivdService.class), serviceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
 
 
         // screen lock
@@ -119,14 +116,17 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
         }
 
+        connector = new GeargrinderServiceConnector(TAG, this, this);
+        connector.bindPrivdService(BIND_AUTO_CREATE | BIND_IMPORTANT);
+        connector.bindPackageService(BIND_AUTO_CREATE | BIND_IMPORTANT);
+
+        makeshiftBind = new MakeshiftBind(this, new ComponentName(this, ProjectionActivity.class), this);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
-
-        unbindService(serviceConnection);
 
         for (VirtualActivity virtualActivity : virtualActivities.values())
             virtualActivity.destroy();
@@ -141,12 +141,10 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     }
 
     private void closeActivity(VirtualActivity virtualActivity) {
-        runOnUiThread(() -> {
-            ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
-            virtualActivities.remove(virtualActivity.getComponentName());
-            splitScreenLayout.removeView(virtualActivity.getRootView());
-            virtualActivity.destroy();
-        });
+        ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
+        virtualActivities.remove(virtualActivity.getComponentName());
+        splitScreenLayout.removeView(virtualActivity.getRootView());
+        virtualActivity.destroy();
     }
 
     private void swapActivities(VirtualActivity a, VirtualActivity b) {
@@ -167,18 +165,19 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     }
 
 
-    private void launchActivity(ComponentName componentName) {
-        if (virtualActivities.containsKey(componentName)) {
+    private void launchActivity(AppRecord app) {
+        VirtualActivity oldActivity = virtualActivities.get(app.launchComponent());
+        if (oldActivity != null) {
             Log.d(TAG, "closing existing instance for relaunch");
-            closeActivity(virtualActivities.get(componentName));
+            closeActivity(oldActivity);
         }
 
         ViewGroup splitScreenLayout = findViewById(R.id.split_screen_layout);
         try {
-            Log.i(TAG, "launching virtual activity: " + componentName);
+            Log.i(TAG, "launching virtual activity: " + app);
 
-            VirtualActivity virtualActivity = new VirtualActivity(privd, componentName, splitScreenLayout, this);
-            virtualActivities.put(componentName, virtualActivity);
+            VirtualActivity virtualActivity = new VirtualActivity(privd, app, splitScreenLayout, this);
+            virtualActivities.put(app.launchComponent(), virtualActivity);
 
             View rootView = virtualActivity.getRootView();
             View splashView = rootView.findViewById(R.id.virtual_activity_splash);
@@ -225,17 +224,34 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     }
 
     @Override
-    public void onAppSelected(ComponentName componentName) {
-        launchActivity(componentName);
+    public void onAppSelected(AppRecord app) {
+        launchActivity(app);
     }
 
     @Override
     public void onAppDrawerSelected() {
         UiUtil.createActivityPickerDialog(this, R.string.launch_app, componentName -> {
-            appDock.addApp(componentName);
-            launchActivity(componentName);
+            // TODO: proper app drawer
+            connector.getPackageBinder()
+                    .map(binder -> binder.getApp(componentName.getPackageName()))
+                    .ifPresent(app -> {
+                        appDock.addApp(app);
+                        launchActivity(app);
+                    });
         }).show();
     }
+
+    @Override
+    public void onPrivdServiceConnected(PrivdService.ServiceBinder binder) {
+        binder.requestDaemon(ProjectionActivity.this);
+    }
+
+    @Override
+    public void onPackageServiceConnected(PackageService.ServiceBinder binder) {
+        binder.registerListener(b -> b.getAppsFor(AppCategory.FOCUSED)
+                .forEach(appDock::addApp));
+    }
+
 
     @Override
     public void onPrivdConnected(IPrivd privd) {
@@ -259,21 +275,6 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
     public IBinder onMakeshiftBind(Intent intent) {
         return binder;
     }
-
-    private final ServiceConnection serviceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            Log.i(TAG, "connected " + name.getShortClassName());
-            privdServiceBinder = (PrivdService.ServiceBinder) service;
-            privdServiceBinder.requestDaemon(ProjectionActivity.this);
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            Log.i(TAG, "disconnected " + name.getShortClassName());
-            privdServiceBinder = null;
-        }
-    };
 
     public class ActivityBinder extends Binder {
 

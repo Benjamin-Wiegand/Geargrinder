@@ -3,7 +3,6 @@ package io.benwiegand.projection.geargrinder.projection;
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.util.Log;
@@ -21,6 +20,7 @@ import androidx.annotation.NonNull;
 import java.io.IOException;
 
 import io.benwiegand.projection.geargrinder.R;
+import io.benwiegand.projection.geargrinder.pm.AppRecord;
 import io.benwiegand.projection.geargrinder.projection.display.LocalVirtualDisplayController;
 import io.benwiegand.projection.geargrinder.projection.display.PrivdVirtualDisplayProxy;
 import io.benwiegand.projection.geargrinder.projection.display.VirtualDisplayController;
@@ -51,7 +51,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private static final long SPLASH_ANIMATION_DURATION = 300;
 
     private final IPrivd privd;
-    private final ComponentName componentName;
+    private final AppRecord app;
     private final VirtualActivityListener listener;
     private final VirtualDisplayController virtualDisplay;
     private final int density;
@@ -66,14 +66,13 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    public VirtualActivity(IPrivd privd, ComponentName componentName, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
+    public VirtualActivity(IPrivd privd, AppRecord app, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
         this.privd = privd;
-        this.componentName = componentName;
+        this.app = app;
         this.listener = listener;
         density = parent.getResources().getDisplayMetrics().densityDpi;
         Context context = parent.getContext();
         PackageManager pm = context.getPackageManager();
-        ActivityInfo activityInfo = pm.getActivityInfo(componentName, 0);
         LayoutInflater inflater = LayoutInflater.from(context);
 
         // display
@@ -105,10 +104,10 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         surfaceView.getHolder().addCallback(this);
 
         TextView titleView = rootView.findViewById(R.id.virtual_activity_title);
-        titleView.setText(pm.getApplicationLabel(activityInfo.applicationInfo));
+        titleView.setText(app.label(pm));
 
         ImageView iconView = rootView.findViewById(R.id.virtual_activity_icon);
-        iconView.setImageDrawable(pm.getApplicationIcon(activityInfo.applicationInfo));
+        iconView.setImageDrawable(app.icon(pm));
 
         rootView.findViewById(R.id.virtual_activity_close_button)
                 .setOnClickListener(v -> listener.onVirtualActivityCloseButton(this));
@@ -121,8 +120,8 @@ public class VirtualActivity implements SurfaceHolder.Callback {
 
         // launch
         try {
-            int result = privd.launchActivity(componentName, getDisplayId());
-            Log.d(TAG, "launch result " + result + " for " + componentName.flattenToShortString());
+            int result = privd.launchActivity(app.launchComponent(), getDisplayId());
+            Log.d(TAG, "launch result " + result + " for " + app.launchComponent().flattenToShortString());
         } catch (Throwable t) {
             throw new RuntimeException("failed to launch activity for virtual activity", t);
         }
@@ -133,7 +132,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     public ComponentName getComponentName() {
-        return componentName;
+        return app.launchComponent();
     }
 
     private void showSplash(boolean animateIn) {

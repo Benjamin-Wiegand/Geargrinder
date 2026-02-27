@@ -5,23 +5,17 @@ import static android.content.Context.BIND_IMPORTANT;
 
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 import android.hardware.display.DisplayManager;
-import android.os.IBinder;
 import android.util.Log;
 import android.view.InputEvent;
 import android.view.Surface;
 
-import java.util.Optional;
-
-import io.benwiegand.projection.geargrinder.AccessibilityInputService;
 import io.benwiegand.projection.geargrinder.PrivdService;
 import io.benwiegand.projection.geargrinder.ProjectionActivity;
 import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.channel.InputChannel;
 import io.benwiegand.projection.geargrinder.coordinate.CoordinateTranslator;
 import io.benwiegand.projection.geargrinder.coordinate.InputEventConverter;
-import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftServiceConnection;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.projection.display.LocalVirtualDisplayController;
 import io.benwiegand.projection.geargrinder.projection.display.PrivdVirtualDisplayProxy;
@@ -29,9 +23,10 @@ import io.benwiegand.projection.geargrinder.projection.display.VirtualDisplayCon
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoPreset;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
+import io.benwiegand.projection.geargrinder.service.GeargrinderServiceConnector;
 import io.benwiegand.projection.libprivd.IPrivd;
 
-public class ProjectionService implements InputEventConverter.ConvertedInputEventListener, IPCConnectionListener {
+public class ProjectionService implements InputEventConverter.ConvertedInputEventListener, IPCConnectionListener, GeargrinderServiceConnector.ConnectionListener {
     private static final String TAG = ProjectionService.class.getSimpleName();
 
     private static final String VIRTUAL_DISPLAY_NAME = "Geargrinder projection";
@@ -57,9 +52,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     private VideoPreset videoPreset = VideoPreset.getDefault();
     private Surface surface = null;
 
-    private AccessibilityInputService.ServiceBinder accessibilityInputServiceBinder = null;
-    private ProjectionActivity.ActivityBinder projectionActivityBinder = null;
-    private PrivdService.ServiceBinder privdServiceBinder = null;
+    public GeargrinderServiceConnector connector;
     private IPrivd privd = null;
 
     private final Context context;
@@ -76,14 +69,14 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
         inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, 0, videoPreset.width(), videoPreset.height());
 
-        MakeshiftServiceConnection.bindService(context, new ComponentName(context, AccessibilityInputService.class), serviceConnection);
-        MakeshiftServiceConnection.bindService(context, new ComponentName(context, ProjectionActivity.class), serviceConnection);
-        context.bindService(new Intent(context, PrivdService.class), serviceConnection, BIND_AUTO_CREATE | BIND_IMPORTANT);
+        connector = new GeargrinderServiceConnector(TAG, context, this);
+        connector.bindAccessibilityService();
+        connector.bindProjectionActivity();
+        connector.bindPrivdService(BIND_AUTO_CREATE | BIND_IMPORTANT);
     }
 
     public void destroy() {
-        context.unbindService(serviceConnection);
-        serviceConnection.destroy();
+        connector.destroy();
         if (virtualDisplay != null)
             virtualDisplay.release();
     }
@@ -98,7 +91,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
                     virtualDisplay.resize(videoPreset.width(), videoPreset.height(), videoPreset.density());
 
                 inputEventConverter.setTargetDisplaySize(videoPreset.width(), videoPreset.height());
-                getProjectionBinder()
+                connector.getProjectionBinder()
                         .ifPresent(binder -> binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical()));
 
                 this.videoPreset = videoPreset;
@@ -128,8 +121,14 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         }
     }
 
-    private void onProjectionActivityConnected(ProjectionActivity.ActivityBinder binder) {
+    @Override
+    public void onProjectionActivityConnected(ProjectionActivity.ActivityBinder binder) {
         binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical());
+    }
+
+    @Override
+    public void onPrivdServiceConnected(PrivdService.ServiceBinder binder) {
+        binder.requestDaemon(this);
     }
 
     @Override
@@ -189,45 +188,4 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         onPrivdDisconnected();
     }
 
-
-    private Optional<AccessibilityInputService.ServiceBinder> getAccessibilityBinder() {
-        return Optional.ofNullable(accessibilityInputServiceBinder);
-    }
-
-    private Optional<ProjectionActivity.ActivityBinder> getProjectionBinder() {
-        return Optional.ofNullable(projectionActivityBinder);
-    }
-
-    private final MakeshiftServiceConnection serviceConnection = new MakeshiftServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            Log.i(TAG, "connected: " + name.getShortClassName());
-            switch (service) {
-                case AccessibilityInputService.ServiceBinder binder -> accessibilityInputServiceBinder = binder;
-                case ProjectionActivity.ActivityBinder binder -> {
-                    projectionActivityBinder = binder;
-                    onProjectionActivityConnected(binder);
-                }
-                case PrivdService.ServiceBinder binder -> {
-                    privdServiceBinder = binder;
-                    privdServiceBinder.requestDaemon(ProjectionService.this);
-                }
-                default -> Log.wtf(TAG, "unhandled binder type", new RuntimeException());
-            }
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            Log.i(TAG, "disconnected: " + name.getShortClassName());
-            if (new ComponentName(context, AccessibilityInputService.class).equals(name)) {
-                accessibilityInputServiceBinder = null;
-            } else if (new ComponentName(context, ProjectionActivity.class).equals(name)) {
-                projectionActivityBinder = null;
-            } else if (new ComponentName(context, PrivdService.class).equals(name)) {
-                privdServiceBinder = null;
-            } else {
-                Log.wtf(TAG, "unhandled component: " + name, new RuntimeException());
-            }
-        }
-    };
 }

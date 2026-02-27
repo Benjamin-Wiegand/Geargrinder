@@ -81,6 +81,11 @@
         </service>
 
         <service
+            android:name=".PackageService"
+            android:exported="false"
+            />
+
+        <service
             android:name=".PrivdService"
             android:exported="false"
             />
