@@ -22,6 +22,8 @@ import javax.net.ssl.TrustManager;
 public class TLSService {
     private static final String TAG = TLSService.class.getSimpleName();
 
+    private static final boolean LOG_DEBUG = false;
+
     private final SSLEngine sslEngine;
     private final SSLSession sslSession;
 
@@ -48,6 +50,7 @@ public class TLSService {
 
             sslEngine = sslContext.createSSLEngine();
             sslEngine.setUseClientMode(false);  // phone is the server, headunit is the client
+//            sslEngine.setWantClientAuth(true);
             sslEngine.setEnabledProtocols(new String[]{"TLSv1.2",});  // TLSv1.3 does not work, nor does TLSv1.1
 
             Log.d(TAG, "default cipher suites: " + Arrays.toString(sslEngine.getEnabledCipherSuites()));
@@ -99,14 +102,13 @@ public class TLSService {
         appTxBuffer.flip();
 
         SSLEngineResult result = sslEngine.wrap(appTxBuffer, devTxBuffer);
+        if (LOG_DEBUG) Log.d(TAG, "wrap: " + result);
 
-        if (result.getStatus() == SSLEngineResult.Status.CLOSED) {
-            Log.e(TAG, "ssl engine closed");
-            throw new IOException("ssl/tls session closed");
-        } else if (result.getStatus() != SSLEngineResult.Status.OK) {
-            // overflow is an error, input should not exceed expected size
-            Log.e(TAG, "ssl engine result status = " + result.getStatus());
-            throw new IOException("unexpected ssl engine result " + result.getStatus());
+        switch (result.getStatus()) {
+            case BUFFER_OVERFLOW -> throw new IOException("buffer overflow while wrapping");
+            case BUFFER_UNDERFLOW -> throw new IOException("buffer underflow while wrapping");
+            case CLOSED -> throw new IOException("ssl/tls session closed");
+            case OK -> { }
         }
 
         assert !appTxBuffer.hasRemaining();
@@ -126,14 +128,13 @@ public class TLSService {
 
         while (devRxBuffer.hasRemaining()) {
             SSLEngineResult result = sslEngine.unwrap(devRxBuffer, appRxBuffer);
+            if (LOG_DEBUG) Log.d(TAG, "unwrap: " + result);
 
-            if (result.getStatus() == SSLEngineResult.Status.CLOSED) {
-                Log.e(TAG, "ssl engine closed");
-                throw new IOException("ssl/tls session closed");
-            } else if (result.getStatus() != SSLEngineResult.Status.OK) {
-                // headunits likely don't have more than 16 KiB of data to send anyway
-                Log.e(TAG, "ssl engine result status = " + result.getStatus());
-                throw new IOException("unexpected ssl engine result " + result.getStatus());
+            switch (result.getStatus()) {
+                case BUFFER_OVERFLOW -> throw new IOException("buffer overflow while unwrapping");
+                case BUFFER_UNDERFLOW -> throw new IOException("buffer underflow while unwrapping");
+                case CLOSED -> throw new IOException("ssl/tls session closed");
+                case OK -> { }
             }
         }
 
@@ -165,13 +166,18 @@ public class TLSService {
                     case NOT_HANDSHAKING -> {
                         Log.i(TAG, "handshake complete");
                         Log.d(TAG, "cipher suite: " + sslSession.getCipherSuite());
+                        Log.d(TAG, "max ciphertext: " + sslSession.getPacketBufferSize());
+                        Log.d(TAG, "max plaintext: " + sslSession.getApplicationBufferSize());
                         handshakeComplete = true;
                         return;
                     }
                     case NEED_WRAP -> {
                         devTxBuffer.clear();
-                        sslEngine.wrap(ByteBuffer.allocate(0), devTxBuffer);
+
+                        SSLEngineResult result = sslEngine.wrap(ByteBuffer.allocate(0), devTxBuffer);
+                        if (LOG_DEBUG) Log.d(TAG, "wrap: " + result);
                         devTxBuffer.flip();
+
                         Log.d(TAG, "handshake out: " + devTxBuffer.remaining() + " bytes");
                         bufferSender.accept(devTxBuffer);
                         assert devTxBuffer.remaining() == 0;
@@ -184,7 +190,8 @@ public class TLSService {
                         inBuffer = null;
 
                         while (sslEngine.getHandshakeStatus() == SSLEngineResult.HandshakeStatus.NEED_UNWRAP) {
-                            sslEngine.unwrap(devRxBuffer, appRxBuffer);
+                            SSLEngineResult result = sslEngine.unwrap(devRxBuffer, appRxBuffer);
+                            if (LOG_DEBUG) Log.d(TAG, "unwrap: " + result);
                         }
 
                         devRxBuffer.compact();

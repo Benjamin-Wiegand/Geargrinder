@@ -1,5 +1,6 @@
 package io.benwiegand.projection.geargrinder.message;
 
+import static io.benwiegand.projection.geargrinder.util.ByteUtil.hexDump;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.readUInt16;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.readInt32;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeInt32;
@@ -37,12 +38,34 @@ public class AAFrame {
         setFlags(flags);
     }
 
+    /**
+     * don't use this constructor when creating a frame to write, use {@link AAFrame#AAFrame(byte[], int)} instead.
+     * flags change the semantics of building an AAFrame.
+     * @param buffer buffer containing an existing frame
+     */
+    public AAFrame(byte[] buffer) {
+        assert buffer.length >= HEADER_LENGTH;
+        this.buffer = buffer;
+    }
+
     public byte[] getBuffer() {
         return buffer;
     }
 
     public boolean isFirstInSequence() {
         return (getFlags() & SEQUENCE_FLAGS_MASK) == FLAG_SEQUENCE_FIRST;
+    }
+
+    public boolean isLastInSequence() {
+        return (getFlags() & SEQUENCE_FLAGS_MASK) == FLAG_SEQUENCE_LAST;
+    }
+
+    public boolean isInSequence() {
+        return (getFlags() & SEQUENCE_FLAGS_MASK) != (FLAG_SEQUENCE_FIRST | FLAG_SEQUENCE_LAST);
+    }
+
+    public boolean isPayloadEncrypted() {
+        return (getFlags() & FLAG_ENCRYPTED) != 0;
     }
 
     public int getLength() {
@@ -107,4 +130,35 @@ public class AAFrame {
         return this;
     }
 
+    public String flagsToString() {
+        int flags = getFlags();
+
+        StringBuilder sb = new StringBuilder("flags=")
+                .append(flags)
+                .append(" [");
+
+        if ((flags & FLAG_SEQUENCE_FIRST) != 0)
+            sb.append("SEQUENCE_FIRST, ");
+        if ((flags & FLAG_SEQUENCE_LAST) != 0)
+            sb.append("SEQUENCE_LAST, ");
+        if ((flags & FLAG_CONTROL) != 0)
+            sb.append("CONTROL, ");
+        if ((flags & FLAG_ENCRYPTED) != 0)
+            sb.append("ENCRYPTED, ");
+
+        return sb
+                .append("]")
+                .toString();
+    }
+
+    @Override
+    public String toString() {
+        return "AAFrame{" +
+                "channelId=" + getChannelId() +
+                ", " + flagsToString() +
+                ", payloadLength=" + getPayloadLength() +
+                ", totalMessageLength=" + getTotalMessageLength() +
+                ", buffer=(" + buffer.length + " bytes, full header: " + hexDump(buffer, 0, getPayloadOffset()) + ")" +
+                '}';
+    }
 }

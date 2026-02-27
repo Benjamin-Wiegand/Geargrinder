@@ -65,7 +65,11 @@ Currently, your phone must natively support the audio sample rate for your headu
 
 ## thanks
 
-These other projects have proved very helpful during development:
+Non-code contributions:
+
+- [Nick](https://github.com/4channel) for helping test on his car
+
+Other projects of great help during development:
 
 - [aasdk](https://github.com/f1xpl/aasdk/)
 - [OpenAuto](https://github.com/f1xpl/OpenAuto/)

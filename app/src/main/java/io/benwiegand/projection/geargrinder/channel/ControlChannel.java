@@ -157,7 +157,7 @@ public class ControlChannel implements MessageListener {
             }
 
             case CMD_AUTH_COMPLETE -> {
-                Log.i(TAG, "auth complete");
+                Log.i(TAG, "auth complete: " + hexDump(buffer, payloadOffset, payloadLength));
 
                 if (tlsService.needsHandshake()) {
                     Log.wtf(TAG, "auth complete before handshake completed?");

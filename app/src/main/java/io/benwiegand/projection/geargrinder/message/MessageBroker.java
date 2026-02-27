@@ -1,6 +1,7 @@
 package io.benwiegand.projection.geargrinder.message;
 
 import static io.benwiegand.projection.geargrinder.message.AAFrame.COMMAND_ID_LENGTH;
+import static io.benwiegand.projection.geargrinder.message.AAFrame.EXTENDED_HEADER_LENGTH;
 import static io.benwiegand.projection.geargrinder.message.AAFrame.EXTENDED_PAYLOAD_MAX_LENGTH;
 import static io.benwiegand.projection.geargrinder.message.AAFrame.FLAG_CONTROL;
 import static io.benwiegand.projection.geargrinder.message.AAFrame.FLAG_ENCRYPTED;
@@ -8,7 +9,6 @@ import static io.benwiegand.projection.geargrinder.message.AAFrame.FLAG_SEQUENCE
 import static io.benwiegand.projection.geargrinder.message.AAFrame.FLAG_SEQUENCE_LAST;
 import static io.benwiegand.projection.geargrinder.message.AAFrame.HEADER_LENGTH;
 import static io.benwiegand.projection.geargrinder.message.AAFrame.PAYLOAD_MAX_LENGTH;
-import static io.benwiegand.projection.geargrinder.util.ByteUtil.readUInt16;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeUInt16;
 
 import android.util.Log;
@@ -32,6 +32,8 @@ public class MessageBroker {
 //    private static final int WRITE_BUFFERS = 4;
     private static final int WRITE_BUFFERS = 8; // TODO
 
+    private static final int INIT_PAYLOAD_BUFFER_SIZE = PAYLOAD_MAX_LENGTH;
+
     // logs payloads for debugging
     private static final boolean LOG_MESSAGE_DEBUG = false;
 
@@ -39,7 +41,11 @@ public class MessageBroker {
 
     private final Map<Integer, MessageListener> messageHandlers = new HashMap<>();
 
-    private final byte[] readBuffer = new byte[AAFrame.MAX_LENGTH];
+    // max outbound length is 16 KiB but frames are technically capable of an additional 8 bytes beyond that
+    private final byte[] readBuffer = new byte[AAFrame.MAX_LENGTH + EXTENDED_HEADER_LENGTH];
+    private final byte[] auxReadBuffer = new byte[AAFrame.MAX_LENGTH + EXTENDED_HEADER_LENGTH];
+    private byte[] readMessageBuffer = new byte[INIT_PAYLOAD_BUFFER_SIZE];
+
     private final byte[][] writeBuffers = new byte[WRITE_BUFFERS][AAFrame.MAX_LENGTH];
 
     private final AATransferInterface transferInterface;
@@ -93,6 +99,19 @@ public class MessageBroker {
         if (length <= payloadMaxLength) return 1;
         int fullFrames = (length - extendedPayloadMaxLength) / payloadMaxLength + 1;
         return (length - extendedPayloadMaxLength) % payloadMaxLength != 0 ? fullFrames + 1 : fullFrames;
+    }
+
+    private void growReadMessageBufferIfNeeded(int newSize, int copy) {
+        assert copy <= readMessageBuffer.length;
+        if (readMessageBuffer.length >= newSize) return;
+
+        Log.d(TAG, "resizing message buffer to " + newSize + " bytes (retaining " + copy + " bytes from start of buffer)");
+
+        byte[] buffer = new byte[newSize];
+        if (copy > 0)
+            System.arraycopy(readMessageBuffer, 0, buffer, 0, copy);
+
+        readMessageBuffer = buffer;
     }
 
     /**
@@ -225,50 +244,101 @@ public class MessageBroker {
         messageHandlers.put(channelId, handler);
     }
 
-    private void handleMessage(int length) throws IOException {
-
-        // TODO: handle message sequences. not a big deal as they are unlikely to occur since usually only the phone sends large amounts of data
-
-        if (length < HEADER_LENGTH) throw new RuntimeException("message too short");
-
-        // header
-        int channelId = readBuffer[0];
-        int flags = readBuffer[1];
-        int payloadLength = readUInt16(readBuffer, 2);
-
-        if (payloadLength + HEADER_LENGTH < length) {
-            Log.w(TAG, "message larger than payload");
-        } else if (payloadLength + HEADER_LENGTH > length) {
-            throw new AssertionError("message too small for payload size");
+    private AAFrame readFrame(byte[] buffer) throws IOException {
+        int len = 0;
+        while (len == 0) {
+            len = transferInterface.readFrame(buffer);
+            if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received frame: len = " + len);
+            if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX raw: " + ByteUtil.hexDump(buffer, 0, len));
+            if (len == 0) Log.w(TAG, "got empty frame");
         }
 
-        // decrypt payload
-        if ((flags & FLAG_ENCRYPTED) != 0) {
-            if (tlsService.needsHandshake()) {
-                Log.wtf(TAG, "encrypted message before handshake?!");
-                if (LOG_MESSAGE_DEBUG)
-                    Log.d(TAG, "RX raw: " + ByteUtil.hexDump(readBuffer, 0, length));
-                throw new AssertionError("received encrypted message before ssl/tls handshake");
-            }
+        if (len < HEADER_LENGTH) throw new RuntimeException("transfer too short");
 
-            payloadLength = tlsService.decrypt(readBuffer, HEADER_LENGTH, payloadLength, out -> {
+        AAFrame frame = new AAFrame(buffer);
+        if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received frame: " + frame);
+
+        if (frame.getLength() < len) {
+            Log.w(TAG, "frame smaller than transfer");
+        } else if (frame.getLength() > len) {
+            throw new AssertionError("transfer too small for frame");
+        }
+
+        return frame;
+    }
+
+    private void readMessage() throws IOException {
+        AAFrame frame = readFrame(readBuffer);
+        int messageLength = 0;  // differs with encryption
+
+        // can't decrypt with no keys
+        if (frame.isPayloadEncrypted() && tlsService.needsHandshake()) {
+            Log.wtf(TAG, "encrypted message before handshake?!");
+            throw new AssertionError("received encrypted message before ssl/tls handshake");
+        }
+
+        // decrypt first frame
+        if (frame.isPayloadEncrypted()) {
+            messageLength += tlsService.decrypt(readBuffer, frame.getPayloadOffset(), frame.getPayloadLength(), out -> {
                 int decryptedLength = out.remaining();
-                out.get(readBuffer, HEADER_LENGTH, out.remaining());
+                growReadMessageBufferIfNeeded(decryptedLength, 0);
+                out.get(readMessageBuffer, 0, decryptedLength);
                 return decryptedLength;
             });
+        } else {
+            messageLength = frame.getTotalMessageLength();
+            growReadMessageBufferIfNeeded(messageLength, 0);
+            System.arraycopy(frame.getBuffer(), frame.getPayloadOffset(), readMessageBuffer, 0, frame.getPayloadLength());
         }
 
-        if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX frame: " + ByteUtil.hexDump(readBuffer, HEADER_LENGTH, payloadLength));
+        // multi-frame messages
+        if (frame.isFirstInSequence()) {
+
+            int rawMessageLength = frame.getPayloadLength();
+
+            AAFrame nFrame;
+            do {
+                nFrame = readFrame(auxReadBuffer);
+                if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received next frame in sequence: " + nFrame);
+                if (!nFrame.isInSequence() || nFrame.isFirstInSequence() || nFrame.getChannelId() != frame.getChannelId() || nFrame.isPayloadEncrypted() != frame.isPayloadEncrypted())
+                    throw new AssertionError("broken frame sequence: first=" + frame + ", n=" + nFrame);
+
+                // decrypt
+                if (frame.isPayloadEncrypted()) {
+                    int curMessageLength = messageLength;
+                    messageLength += tlsService.decrypt(auxReadBuffer, nFrame.getPayloadOffset(), nFrame.getPayloadLength(), out -> {
+                        int decryptedLength = out.remaining();
+                        growReadMessageBufferIfNeeded(curMessageLength + decryptedLength, curMessageLength);
+                        out.get(readMessageBuffer, curMessageLength, decryptedLength);
+                        return decryptedLength;
+                    });
+                } else {
+                    System.arraycopy(nFrame.getBuffer(), nFrame.getPayloadOffset(), readMessageBuffer, rawMessageLength, nFrame.getPayloadLength());
+                }
+
+                rawMessageLength += nFrame.getPayloadLength();
+
+            } while (!nFrame.isLastInSequence());
+
+            // TODO: still need to determine if padding is allowed and could cause this
+            if (rawMessageLength < frame.getTotalMessageLength())
+                Log.w(TAG, "message length miss-match: read=" + rawMessageLength + " expect=" + frame.getTotalMessageLength(), new AssertionError());
+
+        } else if (frame.isInSequence()) {
+            throw new IOException("frame sequence out of order");
+        }
+
+        if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX message: " + ByteUtil.hexDump(readMessageBuffer, 0, messageLength));
 
         // callback
-        MessageListener handler = messageHandlers.get(channelId);
+        MessageListener handler = messageHandlers.get(frame.getChannelId());
         if (handler == null) {
-            Log.w(TAG, "no handler for channel " + channelId);
+            Log.w(TAG, "no handler for channel " + frame.getChannelId());
             return;
         }
 
         try {
-            handler.onMessage(channelId, flags, readBuffer, HEADER_LENGTH, payloadLength);
+            handler.onMessage(frame.getChannelId(), frame.getFlags(), readMessageBuffer, 0, messageLength);
         } catch (Throwable t) {
             Log.wtf(TAG, "exception in message handler", t);
             closeConnection();  // this isn't supposed to happen
@@ -278,13 +348,10 @@ public class MessageBroker {
     public void loop() {
         Log.i(TAG, "connection loop start");
         try {
-            int len;
-            while (transferInterface.alive()) {
-                len = transferInterface.readFrame(readBuffer);
-                if (len == 0) continue;
 
-                handleMessage(len);
-            }
+            while (transferInterface.alive())
+                readMessage();
+
         } catch (IOException e) {
             Log.v(TAG, "connection died", e);
         } finally {
