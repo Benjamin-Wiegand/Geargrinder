@@ -288,6 +288,7 @@ public class AppDrawer implements PackageService.PackageServiceListener, TabLayo
             view.setAlpha(0);
             touchTarget.setOnClickListener(v -> listener.onAppSelected(app));
 
+            touchTarget.setOnLongClickListener(v -> view.startDragAndDrop(null, new View.DragShadowBuilder(iconView), app, 0));
 
             // TODO: seems to still stutter sometimes even with all of this (but only for certain icons?)
             //       might need a bitmap cache

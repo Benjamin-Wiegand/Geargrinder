@@ -135,6 +135,10 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         return app.launchComponent();
     }
 
+    public AppRecord getAppRecord() {
+        return app;
+    }
+
     private void showSplash(boolean animateIn) {
         View splash = rootView.findViewById(R.id.virtual_activity_splash);
         splash.animate()
