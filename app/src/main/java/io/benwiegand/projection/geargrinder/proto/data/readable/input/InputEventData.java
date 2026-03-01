@@ -27,17 +27,12 @@ public record InputEventData(
             ProtoParser.ProtoVarData touchEventField = ProtoParser.getSingle(fields.get(3), ProtoParser.ProtoVarData.class);
             TouchEvent touchEvent = touchEventField == null ? null : TouchEvent.parse(buffer, touchEventField.offset(), touchEventField.length());
 
-            List<ProtoParser.ProtoField> buttonEventFields = fields.get(4);
-            ButtonEvent[] buttonEvents = new ButtonEvent[buttonEventFields == null ? 0 : buttonEventFields.size()];
-            if (buttonEventFields != null) {
-                int i = 0;
-                for (ProtoParser.ProtoField buttonEventField : buttonEventFields) {
-                    if (buttonEventField instanceof ProtoParser.ProtoVarData vd) {
-                        buttonEvents[i++] = ButtonEvent.parse(buffer, vd.offset(), vd.length());
-                    } else {
-                        throw new AssertionError("expected var data for button event, got " + buttonEventField.getClass().getSimpleName());
-                    }
-                }
+            ButtonEvent[] buttonEvents;
+            ProtoParser.ProtoVarData buttonEventField = ProtoParser.getSingle(fields.get(4), ProtoParser.ProtoVarData.class);
+            if (buttonEventField != null) {
+                buttonEvents = ButtonEvent.parseAll(buffer, buttonEventField.offset(), buttonEventField.length());
+            } else {
+                buttonEvents = new ButtonEvent[0];
             }
 
             return new InputEventData(

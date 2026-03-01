@@ -5,6 +5,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.InputEvent;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import java.util.HashMap;
@@ -12,6 +13,7 @@ import java.util.Map;
 
 import io.benwiegand.projection.geargrinder.callback.InputEventListener;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
+import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.ButtonEvent;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 
 /**
@@ -38,6 +40,8 @@ public class InputEventConverter implements InputEventListener {
 
     private final ConvertedInputEventListener listener;
 
+    private final CoordinateTranslator<TouchEvent.PointerLocation> coordinateTranslator;
+
     private InputChannelMeta inputMeta;
     private int targetDisplayId;
     private int displayWidth;
@@ -45,12 +49,15 @@ public class InputEventConverter implements InputEventListener {
     private float xTouchPrecision;
     private float yTouchPrecision;
 
-    private long downTime = 0;
+    private long touchDownTime = 0;
+
+    private final Map<Integer, Long> keyDownTimes = new HashMap<>();
 
 
-    public InputEventConverter(InputChannelMeta inputMeta, ConvertedInputEventListener listener, int targetDisplayId, int displayWidth, int displayHeight) {
+    public InputEventConverter(InputChannelMeta inputMeta, ConvertedInputEventListener listener, CoordinateTranslator<TouchEvent.PointerLocation> coordinateTranslator, int targetDisplayId, int displayWidth, int displayHeight) {
         this.inputMeta = inputMeta;
         this.listener = listener;
+        this.coordinateTranslator = coordinateTranslator;
         this.targetDisplayId = targetDisplayId;
         this.displayWidth = displayWidth;
         this.displayHeight = displayHeight;
@@ -85,11 +92,11 @@ public class InputEventConverter implements InputEventListener {
     }
 
     @Override
-    public void onTouchEvent(TouchEvent event, CoordinateTranslator<TouchEvent.PointerLocation> translator) {
+    public void onTouchEvent(TouchEvent event) {
         long timestamp = SystemClock.uptimeMillis();
 
         if (event.action() == TouchEvent.Action.DOWN) {
-            downTime = timestamp;
+            touchDownTime = timestamp;
             mostRecentPointerLocations.clear();
         }
 
@@ -99,8 +106,8 @@ public class InputEventConverter implements InputEventListener {
         for (int i = 0; i < event.pointerCount(); i++) {
             TouchEvent.PointerLocation pl = event.pointerLocations()[i];
             TouchEvent.PointerLocation plPrev = mostRecentPointerLocations.getOrDefault(pl.pointerIndex(), pl);
-            int x = translator.translateX(pl), y = translator.translateY(pl);
-            int xPrev = translator.translateX(plPrev), yPrev = translator.translateY(plPrev);
+            int x = coordinateTranslator.translateX(pl), y = coordinateTranslator.translateY(pl);
+            int xPrev = coordinateTranslator.translateX(plPrev), yPrev = coordinateTranslator.translateY(plPrev);
 
             MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
             pp.clear();
@@ -123,7 +130,7 @@ public class InputEventConverter implements InputEventListener {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             MotionEvent motionEvent = MotionEvent.obtain(
-                    downTime,
+                    touchDownTime,
                     timestamp,
                     event.actionInt(),
                     event.pointerCount(),
@@ -143,7 +150,7 @@ public class InputEventConverter implements InputEventListener {
             listener.onInputEvent(motionEvent, targetDisplayId, true);
         } else {
             MotionEvent motionEvent = MotionEvent.obtain(
-                    downTime,
+                    touchDownTime,
                     timestamp,
                     event.actionInt(),
                     event.pointerCount(),
@@ -160,5 +167,30 @@ public class InputEventConverter implements InputEventListener {
 
             listener.onInputEvent(motionEvent, targetDisplayId, false);
         }
+    }
+
+    @Override
+    public void onButtonEvent(ButtonEvent event) {
+        long timestamp = SystemClock.uptimeMillis();
+
+        long downTime;
+        if (event.pressed()) {
+            keyDownTimes.put(event.code(), timestamp);
+            downTime = timestamp;
+        } else {
+            Long tDownTime = keyDownTimes.get(event.code());
+            downTime = tDownTime != null ? tDownTime : timestamp;
+        }
+
+        // TODO: repeating key events for arrows
+        KeyEvent keyEvent = new KeyEvent(
+                downTime,
+                timestamp,
+                event.pressed() ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
+                event.code(),
+                0
+        );
+
+        listener.onInputEvent(keyEvent, targetDisplayId, false);
     }
 }

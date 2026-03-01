@@ -69,6 +69,7 @@ Currently, your phone must natively support the audio sample rate for your headu
 - User input
     - touch screen input (with multitouch)
     - phone keyboard input
+    - basic button input
 - Basic UI
     - open apps on the display
     - split screen

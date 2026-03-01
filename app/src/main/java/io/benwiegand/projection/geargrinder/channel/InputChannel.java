@@ -12,7 +12,6 @@ import static io.benwiegand.projection.geargrinder.util.ByteUtil.readUInt16;
 import android.util.Log;
 
 import io.benwiegand.projection.geargrinder.callback.InputEventListener;
-import io.benwiegand.projection.geargrinder.coordinate.CoordinateTranslator;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.callback.MessageListener;
 import io.benwiegand.projection.geargrinder.proto.ProtoParser;
@@ -20,7 +19,6 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelOpenRespo
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputEventData;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.ButtonEvent;
-import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 import io.benwiegand.projection.geargrinder.proto.data.writable.ChannelOpenRequest;
 
 public class InputChannel implements MessageListener {
@@ -34,7 +32,6 @@ public class InputChannel implements MessageListener {
     private final MessageBroker.MessageSendParameters messageParams;
 
     private InputEventListener inputEventListener = null;
-    private final CoordinateTranslator<TouchEvent.PointerLocation> touchCoordinateTranslator = CoordinateTranslator.createTouchEventPassthrough();
 
     public InputChannel(MessageBroker mb, InputChannelMeta channelMeta) {
         this.mb = mb;
@@ -64,7 +61,7 @@ public class InputChannel implements MessageListener {
     private void onInputEvent(InputEventData eventData) {
         for (ButtonEvent buttonEvent : eventData.buttonEvents()) {
             Log.i(TAG, "button event: " + buttonEvent);
-            // TODO: parse
+            inputEventListener.onButtonEvent(buttonEvent);
         }
 
         if (eventData.touchEvent() != null) {
@@ -72,7 +69,7 @@ public class InputChannel implements MessageListener {
                 Log.wtf(TAG, "got touch event with no attached touch screen???");
                 return;
             }
-            inputEventListener.onTouchEvent(eventData.touchEvent(), touchCoordinateTranslator);
+            inputEventListener.onTouchEvent(eventData.touchEvent());
         }
     }
 

@@ -58,16 +58,15 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
     private final Context context;
     private final MessageBroker mb;
 
-    private final CoordinateTranslator<TouchEvent.PointerLocation> projectionTouchCoordinateTranslator = CoordinateTranslator.createTouchEvent(
-            x -> x + videoPreset.marginHorizontal() / 2,
-            y -> y + videoPreset.marginVertical() / 2
-    );
-
     public ProjectionService(Context context, MessageBroker mb) {
         this.context = context;
         this.mb = mb;
 
-        inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, 0, videoPreset.width(), videoPreset.height());
+        CoordinateTranslator<TouchEvent.PointerLocation> coordinateTranslator = CoordinateTranslator.createTouchEvent(
+                x -> x + videoPreset.marginHorizontal() / 2,
+                y -> y + videoPreset.marginVertical() / 2
+        );
+        inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, coordinateTranslator, 0, videoPreset.width(), videoPreset.height());
 
         connector = new GeargrinderServiceConnector(TAG, context, this);
         connector.bindAccessibilityService();
@@ -106,8 +105,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
     public void setInput(InputChannel inputChannel) {
         inputEventConverter.setInputMeta(inputChannel.getMetadata());
-        inputChannel.setInputEventListener((event, translator) ->
-                inputEventConverter.onTouchEvent(event, translator.chain(projectionTouchCoordinateTranslator)));
+        inputChannel.setInputEventListener(inputEventConverter);;
     }
 
     @Override
