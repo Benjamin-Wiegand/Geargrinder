@@ -137,6 +137,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         virtualActivities.clear();
 
         makeshiftBind.destroy();
+        connector.destroy();
     }
 
     public void onGlobalLayout() {
