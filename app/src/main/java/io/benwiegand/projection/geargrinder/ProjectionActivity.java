@@ -142,6 +142,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         makeshiftBind.destroy();
         connector.destroy();
 
+        appDrawer.destroy();
         batteryIndicator.destroy();
     }
 
