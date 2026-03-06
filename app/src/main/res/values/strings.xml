@@ -44,5 +44,6 @@
     <string name="shizuku_not_running">Unable to connect to Shizuku, is Shizuku running?</string>
     <string name="shizuku_too_old">Please update Shizuku.</string>
     <string name="battery_percent_format" formatted="true">%d%%</string>
+    <string name="pref_category_operations">operations</string>
 
 </resources>

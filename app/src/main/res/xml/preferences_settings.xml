@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <PreferenceCategory
-        app:title="operations"
+        app:title="@string/pref_category_operations"
         app:iconSpaceReserved="false"
         >
 
