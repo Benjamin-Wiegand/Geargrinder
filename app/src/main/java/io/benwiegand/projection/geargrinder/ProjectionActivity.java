@@ -29,6 +29,7 @@ import io.benwiegand.projection.geargrinder.makeshiftbind.MakeshiftBind;
 import io.benwiegand.projection.geargrinder.callback.MakeshiftBindCallback;
 import io.benwiegand.projection.geargrinder.pm.AppCategory;
 import io.benwiegand.projection.geargrinder.pm.AppRecord;
+import io.benwiegand.projection.geargrinder.projection.ui.BatteryIndicator;
 import io.benwiegand.projection.geargrinder.projection.ui.VirtualActivity;
 import io.benwiegand.projection.geargrinder.service.GeargrinderServiceConnector;
 import io.benwiegand.projection.geargrinder.projection.ui.AppDock;
@@ -51,6 +52,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
     private AppDock appDock;
     private AppDrawer appDrawer;
+    private BatteryIndicator batteryIndicator;
 
     private GeargrinderServiceConnector connector;
     private IPrivd privd = null;
@@ -115,6 +117,7 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         // components
         appDock = new AppDock(findViewById(R.id.app_dock), this);
         appDrawer = new AppDrawer(findViewById(R.id.app_drawer), this);
+        batteryIndicator = new BatteryIndicator(findViewById(R.id.battery_indicator));
 
         // layout updates
         findViewById(R.id.root).getViewTreeObserver().addOnGlobalLayoutListener(this::onGlobalLayout);
@@ -138,6 +141,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
         makeshiftBind.destroy();
         connector.destroy();
+
+        batteryIndicator.destroy();
     }
 
     public void onGlobalLayout() {

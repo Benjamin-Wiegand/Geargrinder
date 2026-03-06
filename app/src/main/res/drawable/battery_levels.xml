@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<level-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:drawable="@drawable/battery_000" android:maxLevel="4" />
+    <item android:drawable="@drawable/battery_010" android:maxLevel="19" />
+    <item android:drawable="@drawable/battery_020" android:maxLevel="29" />
+    <item android:drawable="@drawable/battery_030" android:maxLevel="39" />
+    <item android:drawable="@drawable/battery_040" android:maxLevel="49" />
+    <item android:drawable="@drawable/battery_050" android:maxLevel="59" />
+    <item android:drawable="@drawable/battery_060" android:maxLevel="69" />
+    <item android:drawable="@drawable/battery_070" android:maxLevel="79" />
+    <item android:drawable="@drawable/battery_080" android:maxLevel="89" />
+    <item android:drawable="@drawable/battery_090" android:maxLevel="95" />
+    <item android:drawable="@drawable/battery_100" android:maxLevel="100" />
+
+</level-list>

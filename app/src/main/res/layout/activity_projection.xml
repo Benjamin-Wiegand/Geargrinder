@@ -90,14 +90,38 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 />
 
-            <TextClock
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="0"
                 android:layout_marginHorizontal="8dp"
-                style="@style/TextAppearance.MaterialComponents.Headline6"
-                android:textColor="@color/white"
-                />
+                android:layout_weight="0"
+                android:orientation="vertical"
+                android:gravity="end"
+                >
+
+                <TextClock
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    style="@style/TextAppearance.MaterialComponents.Headline6"
+                    android:textColor="@color/white"
+                    />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    >
+
+                    <include
+                        android:id="@+id/battery_indicator"
+                        layout="@layout/layout_battery_indicator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        />
+
+                </LinearLayout>
+
+            </LinearLayout>
 
         </LinearLayout>
 

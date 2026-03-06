@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center"
+    tools:ignore="UseCompoundDrawables"
+    >
+
+    <ImageView
+        android:id="@+id/battery_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:importantForAccessibility="no"
+        tools:src="@drawable/battery_indicator"
+        />
+
+    <TextView
+        android:id="@+id/battery_percent_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:lines="1"
+        android:ellipsize="none"
+        tools:text="69%"
+        style="@style/TextAppearance.MaterialComponents.Subtitle1"
+        />
+
+</LinearLayout>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 512 512"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath6">
+      <g
+         id="use6">
+        <path
+           id="path1"
+           style="display:inline;fill:#ffffff;fill-opacity:0;fill-rule:evenodd;stroke:none;stroke-width:0;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:7.1;stroke-opacity:1;paint-order:markers fill stroke"
+           d="m 149.71303,84.024079 h 60.54225 V 38.279378 h 45.7447 45.74471 v 45.744701 h 60.54227 V 427.97592 H 149.71303 Z" />
+      </g>
+    </clipPath>
+  </defs>
+  <g
+     id="layer2">
+    <path
+       style="display:inline;fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:7.1;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       d="m 283.80061,149.64268 -94.4424,135.7751 h 53.49546 l -8.74424,108.93953 88.53236,-149.27719 -51.42834,1.02325 z"
+       id="path6" />
+  </g>
+</svg>
