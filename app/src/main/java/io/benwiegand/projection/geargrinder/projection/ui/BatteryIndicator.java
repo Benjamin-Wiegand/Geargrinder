@@ -65,7 +65,15 @@ public class BatteryIndicator {
     private final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            handleBatteryIntent(intent);
+            BatteryState newState = new BatteryState(
+                    intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
+                    intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1),
+                    intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+            );
+
+            if (newState.equals(batteryState)) return;
+            batteryState = newState;
+            onBatteryStateUpdated();
         }
     };
 
@@ -79,6 +87,7 @@ public class BatteryIndicator {
         ImageView iconView = rootView.findViewById(R.id.battery_icon);
         iconView.setImageDrawable(batteryIndicatorIcon);
 
+        setShowing(false);
         context.registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     }
 
@@ -86,20 +95,8 @@ public class BatteryIndicator {
         context.unregisterReceiver(batteryReceiver);
     }
 
-    public void setShowing(boolean showing) {
+    private void setShowing(boolean showing) {
         rootView.setVisibility(showing ? View.VISIBLE : View.GONE);
-    }
-
-    private void handleBatteryIntent(Intent intent) {
-        BatteryState newState = new BatteryState(
-                intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
-                intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1),
-                intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
-        );
-
-        if (newState.equals(batteryState)) return;
-        batteryState = newState;
-        onBatteryStateUpdated();
     }
 
     private void onBatteryStateUpdated() {
