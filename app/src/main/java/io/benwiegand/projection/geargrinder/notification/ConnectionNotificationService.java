@@ -15,6 +15,7 @@ import android.util.Log;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 
+import io.benwiegand.projection.geargrinder.ConnectionService;
 import io.benwiegand.projection.geargrinder.DebugActivity;
 import io.benwiegand.projection.geargrinder.R;
 
@@ -117,6 +118,11 @@ public class ConnectionNotificationService {
         Intent intent = new Intent(context, DebugActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent deleteIntent = new Intent(context, ConnectionService.class)
+                .setAction(ConnectionService.INTENT_ACTION_STOP_CONNECTION);
+        PendingIntent deletePendingIntent = PendingIntent.getService(context, 0, deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Notification notification = new Notification.Builder(context, FOREGROUND_NOTIFICATION_CHANNEL)
                 .setSmallIcon(R.drawable.car)
                 .setOngoing(true)
@@ -124,6 +130,8 @@ public class ConnectionNotificationService {
                 .setContentTitle(context.getString(connectionStatusText))
                 .setSubText(carName)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)  // can't see notification with media projection active without this
+                .setDeleteIntent(deletePendingIntent)
+                .setActions(new Notification.Action.Builder(null, context.getString(R.string.stop_button), deletePendingIntent).build())
                 .build();
 
         if (foregroundFlags == 0) {

@@ -16,7 +16,6 @@ import io.benwiegand.projection.geargrinder.callback.IPCConnectionListener;
 import io.benwiegand.projection.geargrinder.channel.InputChannel;
 import io.benwiegand.projection.geargrinder.projection.input.CoordinateTranslator;
 import io.benwiegand.projection.geargrinder.projection.input.InputEventConverter;
-import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.projection.display.LocalVirtualDisplayController;
 import io.benwiegand.projection.geargrinder.projection.display.PrivdVirtualDisplayProxy;
 import io.benwiegand.projection.geargrinder.projection.display.VirtualDisplayController;
@@ -46,21 +45,37 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
     private final Object lock = new Object();
 
-    private final InputEventConverter inputEventConverter;
+    private InputEventConverter inputEventConverter;
 
     private VirtualDisplayController virtualDisplay = null;
-    private VideoPreset videoPreset = VideoPreset.getDefault();
+    private VideoPreset videoPreset;
     private Surface surface = null;
 
     public GeargrinderServiceConnector connector;
     private IPrivd privd = null;
 
     private final Context context;
-    private final MessageBroker mb;
 
-    public ProjectionService(Context context, MessageBroker mb) {
+    public interface Listener {
+        void onProjectionStarted();
+        void onProjectionFailed(Throwable t);
+    }
+
+    private Listener projectionListener;
+    private boolean started = false;
+    private boolean inputInit = false;
+    private boolean outputInit = false;
+    private boolean uiInit = false;
+    private boolean virtualDisplayInit = false;
+
+    private boolean dead = false;
+    private Throwable error = null;
+
+
+    public ProjectionService(Context context, Listener projectionListener, VideoPreset videoPreset) {
         this.context = context;
-        this.mb = mb;
+        this.projectionListener = projectionListener;
+        this.videoPreset = videoPreset;
 
         CoordinateTranslator<TouchEvent.PointerLocation> coordinateTranslator = CoordinateTranslator.createTouchEvent(
                 x -> x + videoPreset.marginHorizontal() / 2,
@@ -74,10 +89,64 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         connector.bindPrivdService(BIND_AUTO_CREATE | BIND_IMPORTANT);
     }
 
+    public ProjectionService(Context context, Listener projectionListener) {
+        this(context, projectionListener, VideoPreset.getDefault());
+    }
+
     public void destroy() {
+        if (dead) return;
+        dead = true;
         connector.destroy();
         if (virtualDisplay != null)
             virtualDisplay.release();
+    }
+
+    public Throwable getError() {
+        return error;
+    }
+
+    private void onInitAdvancedLocked() {
+        if (started) return;
+        if (!inputInit || !outputInit || !uiInit || !virtualDisplayInit) return;
+        started = true;
+
+        Log.i(TAG, "init complete");
+        projectionListener.onProjectionStarted();
+    }
+
+    private void onFailureLocked(String message, Throwable t) {
+        if (dead) return;
+        if (error != null) {
+            Log.w(TAG, "projection already failed, but another failure happened: " + message, t);
+            return;
+        }
+        Log.e(TAG, "projection failure: " + message, t);
+        error = new RuntimeException(message, t).fillInStackTrace();
+        projectionListener.onProjectionFailed(error);
+    }
+
+    public void unsuspend(Listener projectionListener) {
+        synchronized (lock) {
+            Log.i(TAG, "unsuspending projection");
+            assert !dead;
+            if (started) Log.w(TAG, "unsuspend() called but projection already unsuspended");
+
+            this.projectionListener = projectionListener;
+            if (error != null) projectionListener.onProjectionFailed(error);
+            else if (started) projectionListener.onProjectionStarted();
+        }
+    }
+
+    public void suspend() {
+        synchronized (lock) {
+            Log.i(TAG, "suspending projection");
+            // ui and virtual display stay active so the projection can be resumed
+            started = false;
+            inputInit = false;
+            outputInit = false;
+
+            if (virtualDisplay != null) virtualDisplay.setSurface(null);
+        }
     }
 
     public void setOutput(Surface surface, VideoPreset videoPreset) {
@@ -100,17 +169,26 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
                 virtualDisplay.setSurface(surface);
 
             this.surface = surface;
+
+            outputInit = true;
+            onInitAdvancedLocked();
         }
     }
 
     public void setInput(InputChannel inputChannel) {
-        inputEventConverter.setInputMeta(inputChannel.getMetadata());
-        inputChannel.setInputEventListener(inputEventConverter);;
+        synchronized (lock) {
+            inputEventConverter.setInputMeta(inputChannel.getMetadata());
+            inputChannel.setInputEventListener(inputEventConverter);
+
+            inputInit = true;
+            onInitAdvancedLocked();
+        }
     }
 
     @Override
     public void onInputEvent(InputEvent event, int displayId, boolean displayIdSet) {
-        if (virtualDisplay == null) return;
+        if (!started) return;
+
         try {
             boolean result = displayIdSet ? privd.injectInputEvent(event) : privd.injectInputEventWithDisplayId(event, displayId);
             if (!result) Log.w(TAG, "motion event result is false");
@@ -121,7 +199,12 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
 
     @Override
     public void onProjectionActivityConnected(ProjectionActivity.ActivityBinder binder) {
-        binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical());
+        synchronized (lock) {
+            binder.setMargins(videoPreset.marginHorizontal(), videoPreset.marginVertical());
+
+            uiInit = true;
+            onInitAdvancedLocked();
+        }
     }
 
     @Override
@@ -135,6 +218,7 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         this.privd = privd;
 
         synchronized (lock) {
+            if (virtualDisplayInit) return;
             assert virtualDisplay == null;
 
             try {
@@ -147,43 +231,51 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
             } catch (Throwable t) {
                 Log.e(TAG, "failed to create virtual display via privd", t);
 
-                // this is less consequential for ProjectionService
-                Log.w(TAG, "falling back to local virtual display");
-                DisplayManager dm = context.getSystemService(DisplayManager.class);
-                virtualDisplay = new LocalVirtualDisplayController(
-                        dm, VIRTUAL_DISPLAY_NAME,
-                        videoPreset.width(), videoPreset.height(), videoPreset.density(),
-                        surface, LOCAL_VIRTUAL_DISPLAY_FLAGS
-                );
+                try {
+                    // this is less consequential for ProjectionService than it is for VirtualActivity
+                    Log.w(TAG, "falling back to local virtual display");
+                    DisplayManager dm = context.getSystemService(DisplayManager.class);
+                    virtualDisplay = new LocalVirtualDisplayController(
+                            dm, VIRTUAL_DISPLAY_NAME,
+                            videoPreset.width(), videoPreset.height(), videoPreset.density(),
+                            surface, LOCAL_VIRTUAL_DISPLAY_FLAGS
+                    );
+                } catch (Throwable tt) {
+                    onFailureLocked("unable to create virtual display through privd or locally", tt);
+                    return;
+                }
             }
 
             inputEventConverter.setTargetDisplayId(virtualDisplay.getDisplayId());
-        }
 
-        try {
-            Log.d(TAG, "launching projection activity");
-            privd.launchActivity(
-                    new ComponentName(context, ProjectionActivity.class),
-                    virtualDisplay.getDisplayId()
-            );
-        } catch (Throwable t) {
-            Log.wtf(TAG, "failed to launch projection activity", t);
-            mb.closeConnection();
+            try {
+                Log.d(TAG, "launching projection activity");
+                privd.launchActivity(
+                        new ComponentName(context, ProjectionActivity.class),
+                        virtualDisplay.getDisplayId()
+                );
+            } catch (Throwable t) {
+                onFailureLocked("failed to launch projection activity on virtual display via privd", t);
+                return;
+            }
+
+            virtualDisplayInit = true;
+            onInitAdvancedLocked();
         }
     }
 
     @Override
     public void onPrivdDisconnected() {
-        if (!mb.isAlive()) return;
-
-        Log.wtf(TAG, "privd connection lost, bailing");
-        mb.closeConnection();
+        synchronized (lock) {
+            onFailureLocked("privd connection lost", null);
+        }
     }
 
     @Override
     public void onPrivdLaunchFailure(Throwable t) {
-        // TODO: do something about this
-        onPrivdDisconnected();
+        synchronized (lock) {
+            onFailureLocked("privd failed to launch", t);
+        }
     }
 
 }

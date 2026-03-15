@@ -9,6 +9,7 @@ import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeUInt16;
 
 import android.content.Context;
 import android.media.AudioPlaybackCaptureConfiguration;
+import android.os.Build;
 import android.util.Log;
 
 import java.util.Arrays;
@@ -29,12 +30,13 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.ServiceDiscovery
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.VideoChannelMeta;
 import io.benwiegand.projection.geargrinder.callback.ControlListener;
 
-public class ControlChannel implements MessageListener {
+public class ControlChannel implements MessageListener, ProjectionService.Listener {
     private static final String TAG = ControlChannel.class.getSimpleName();
 
     private static final int VERSION_CODE_MAJOR = 1;
     private static final int VERSION_CODE_MINOR = 7;
 
+    private final Context context;
     private final ConnectionService.ServiceBinder connectionServiceBinder;
     private final MessageBroker mb;
     private final TLSService tlsService;
@@ -44,7 +46,6 @@ public class ControlChannel implements MessageListener {
 
     private final ControlListener controlListener;
 
-    private final ProjectionService projectionService;
     private VideoChannel videoChannel = null;
     private AudioChannel mediaAudioChannel = null;
     private InputChannel inputChannel = null;
@@ -53,20 +54,18 @@ public class ControlChannel implements MessageListener {
     private AudioChannelMeta mediaAudioChannelMeta = null;
     private InputChannelMeta inputChannelMeta = null;
 
-
     public ControlChannel(Context context, MessageBroker mb, TLSService tlsService, ControlListener controlListener, ConnectionService.ServiceBinder connectionServiceBinder) {
+        this.context = context;
         this.connectionServiceBinder = connectionServiceBinder;
         this.mb = mb;
         this.tlsService = tlsService;
         this.controlListener = controlListener;
-        projectionService = new ProjectionService(context, mb);
 
         unencryptedParams = new MessageBroker.MessageSendParameters(CHANNEL_CONTROL, false, false);
         encryptedParams = new MessageBroker.MessageSendParameters(CHANNEL_CONTROL, true, false);
     }
 
     public void destroy() {
-        projectionService.destroy();
         if (videoChannel != null) videoChannel.destroy();
         if (mediaAudioChannel != null) mediaAudioChannel.destroy();
         if (inputChannel != null) inputChannel.destroy();
@@ -105,6 +104,60 @@ public class ControlChannel implements MessageListener {
         if (videoChannelMeta == null) Log.w(TAG, "can't start video: no video channel");
         if (mediaAudioChannelMeta == null) Log.w(TAG, "can't start audio: no media audio channel");
         if (inputChannelMeta == null) Log.w(TAG, "can't start input: no input channel");
+    }
+
+    private void startProjection() {
+        ProjectionService projectionService = connectionServiceBinder.getOrCreateGeargrinderProjectionService(this);
+
+        if (videoChannelMeta != null) {
+            Log.d(TAG, "init video channel");
+            videoChannel = new VideoChannel(mb, projectionService, videoChannelMeta);
+            videoChannel.openChannel();
+        }
+
+        if (mediaAudioChannelMeta != null) {
+            connectionServiceBinder.requestMediaProjection(mediaProjection -> {
+                if (!mb.isAlive()) return;
+
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    Log.e(TAG, "can't launch audio capture through MediaProjection: android version too old");
+                    // TODO: error
+                    return;
+                }
+
+                try {
+                    Log.d(TAG, "init media audio channel");
+                    mediaAudioChannel = new AudioChannel(mb, mediaAudioChannelMeta, (preset, bufferSize) -> new AudioRecordCapture(
+                            new AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+                                    .excludeUsage(USAGE_ALARM)
+                                    .build(),
+                            preset, bufferSize
+                    ));
+                    mediaAudioChannel.openChannel();
+                } catch (SecurityException e) {
+                    Log.e(TAG, "can't launch audio capture: need explicit RECORD_AUDIO permission", e);
+                    // TODO: request
+                }
+            });
+        }
+
+        if (inputChannelMeta != null) {
+            Log.d(TAG, "init input channel");
+            inputChannel = new InputChannel(mb, inputChannelMeta);
+            inputChannel.openChannel();
+            projectionService.setInput(inputChannel);
+        }
+    }
+
+    @Override
+    public void onProjectionStarted() {
+        Log.i(TAG, "projection started");
+    }
+
+    @Override
+    public void onProjectionFailed(Throwable t) {
+        Log.e(TAG, "projection failed to launch, bailing");
+        mb.closeConnection();
     }
 
     @Override
@@ -193,38 +246,8 @@ public class ControlChannel implements MessageListener {
 
                 Log.d(TAG, "response data: " + response);
                 handleServiceDiscoveryResponse(response);
+                startProjection();
 
-                if (videoChannelMeta != null) {
-                    Log.d(TAG, "init video channel");
-                    videoChannel = new VideoChannel(mb, projectionService, videoChannelMeta);
-                    videoChannel.openChannel();
-                }
-
-                if (mediaAudioChannelMeta != null) {
-                    connectionServiceBinder.requestMediaProjection(mediaProjection -> {
-                        if (!mb.isAlive()) return;
-
-                        Log.d(TAG, "init media audio channel");
-                        mediaAudioChannel = new AudioChannel(mb, mediaAudioChannelMeta, (preset, bufferSize) -> {
-                            // TODO: handle permission and api requirement
-                            return new AudioRecordCapture(
-                                    new AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-                                            .excludeUsage(USAGE_ALARM)
-                                            .build(),
-                                    preset,
-                                    bufferSize
-                            );
-                        });
-                        mediaAudioChannel.openChannel();
-                    });
-                }
-
-                if (inputChannelMeta != null) {
-                    Log.d(TAG, "init input channel");
-                    inputChannel = new InputChannel(mb, inputChannelMeta);
-                    inputChannel.openChannel();
-                    projectionService.setInput(inputChannel);
-                }
             }
 
             default -> {

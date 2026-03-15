@@ -33,6 +33,7 @@ import io.benwiegand.projection.geargrinder.crypto.TLSService;
 import io.benwiegand.projection.geargrinder.message.AAFrame;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.notification.ConnectionNotificationService;
+import io.benwiegand.projection.geargrinder.projection.ProjectionService;
 import io.benwiegand.projection.geargrinder.protocol.AAConstants;
 import io.benwiegand.projection.geargrinder.callback.ControlListener;
 import io.benwiegand.projection.geargrinder.channel.ControlChannel;
@@ -43,6 +44,7 @@ public class ConnectionService extends Service implements ControlListener {
 
     public static final String INTENT_ACTION_CONNECT_USB = "io.benwiegand.projection.geargrinder.USB_HEADUNIT_CONNECTED";
     public static final String INTENT_ACTION_START_MEDIA_PROJECTION = "io.benwiegand.projection.geargrinder.START_MEDIA_PROJECTION";
+    public static final String INTENT_ACTION_STOP_CONNECTION = "io.benwiegand.projection.geargrinder.STOP_CONNECTION";
 
     public static final String INTENT_EXTRA_MEDIA_PROJECTION_PERMISSION_RESULT = "projection_result";
 
@@ -58,6 +60,8 @@ public class ConnectionService extends Service implements ControlListener {
 
     private MediaProjection mediaProjection = null;
     private MediaProjectionRequestCallback mediaProjectionRequestCallback = null;
+
+    private ProjectionService projectionService = null;
 
 
     @Override
@@ -87,6 +91,8 @@ public class ConnectionService extends Service implements ControlListener {
         super.onDestroy();
         Log.d(TAG, "on destroy");
         notificationService.destroy();
+        if (connectionThread != null) connectionThread.interrupt();
+        if (projectionService != null) projectionService.destroy();
     }
 
     @Nullable
@@ -106,11 +112,25 @@ public class ConnectionService extends Service implements ControlListener {
         switch (intent.getAction()) {
             case INTENT_ACTION_CONNECT_USB -> connectUsb();
             case INTENT_ACTION_START_MEDIA_PROJECTION -> startMediaProjection(intent);
+            case INTENT_ACTION_STOP_CONNECTION -> stopConnection();
             case null -> Log.e(TAG, "no intent action");
             default -> Log.wtf(TAG, "intent action not handled: " + intent.getAction());
         }
 
         return START_NOT_STICKY;
+    }
+
+    private void stopConnection() {
+        synchronized (lock) {
+            Log.i(TAG, "stopping headunit connection");
+            if (connectionThread != null) connectionThread.interrupt();
+            if (projectionService != null) {
+                projectionService.destroy();
+                projectionService = null;
+            }
+
+            stopSelf();
+        }
     }
 
     private final MediaProjection.Callback mediaProjectionCallback = new MediaProjection.Callback() {
@@ -251,6 +271,8 @@ public class ConnectionService extends Service implements ControlListener {
                 notificationService.removeForegroundFlag(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             notificationService.setConnectionStatusText(R.string.looking_for_car);
             connectionThread = null;
+
+            if (projectionService != null) projectionService.suspend();
         }
     }
 
@@ -274,6 +296,24 @@ public class ConnectionService extends Service implements ControlListener {
                 startActivity(new Intent(ConnectionService.this, ConnectionRequestActivity.class)
                         .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+        }
+
+        public ProjectionService getOrCreateGeargrinderProjectionService(ProjectionService.Listener listener) {
+            synchronized (lock) {
+                if (projectionService != null) {
+                    if (projectionService.getError() == null) {
+                        Log.i(TAG, "resuming existing projection service");
+                        projectionService.unsuspend(listener);
+                        return projectionService;
+                    }
+
+                    Log.i(TAG, "creating new projection service due to error");
+                    projectionService.destroy();
+                }
+
+                projectionService = new ProjectionService(ConnectionService.this, listener);
+                return projectionService;
             }
         }
 

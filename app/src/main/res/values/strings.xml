@@ -59,5 +59,6 @@
     <string name="cellular_network_badge_g">G</string>
     <string name="cellular_network_badge_unknown" />
     <string name="cellular_network_badge_none" />
+    <string name="stop_button">stop</string>
 
 </resources>
