@@ -13,11 +13,29 @@
         <item>Geargrinder UI</item>
     </string-array>
 
+    <string-array name="projection_grace_period_entries">
+        <item>disabled</item>
+        <item>15 seconds</item>
+        <item>30 seconds</item>
+        <item>1 minute</item>
+        <item>2 minutes</item>
+    </string-array>
+
+
+    <string translatable="false" name="privilege_mode_no_root">no_root</string>
+    <string translatable="false" name="privilege_mode_shizuku">shizuku</string>
+    <string translatable="false" name="privilege_mode_root">root</string>
+
     <string-array translatable="false" name="privilege_mode_values">
 <!--        <item>@string/privilege_mode_no_root</item>-->
         <item>@string/privilege_mode_shizuku</item>
         <item>@string/privilege_mode_root</item>
     </string-array>
+
+
+    <string translatable="false" name="operational_mode_audio_only">audio_only</string>
+    <string translatable="false" name="operational_mode_screen_mirroring">screen_mirroring</string>
+    <string translatable="false" name="operational_mode_geargrinder_projection">geargrinder_projection</string>
 
     <string-array translatable="false" name="operational_mode_values">
         <item>@string/operational_mode_audio_only</item>
@@ -25,14 +43,25 @@
         <item>@string/operational_mode_geargrinder_projection</item>
     </string-array>
 
-    <string translatable="false" name="operational_mode_audio_only">audio_only</string>
-    <string translatable="false" name="operational_mode_screen_mirroring">screen_mirroring</string>
-    <string translatable="false" name="operational_mode_geargrinder_projection">geargrinder_projection</string>
 
-    <string translatable="false" name="privilege_mode_no_root">no_root</string>
-    <string translatable="false" name="privilege_mode_shizuku">shizuku</string>
-    <string translatable="false" name="privilege_mode_root">root</string>
+    <string translatable="false" name="projection_grace_period_disabled">0</string>
+    <string translatable="false" name="projection_grace_period_15_sec">15</string>
+    <string translatable="false" name="projection_grace_period_30_sec">30</string>
+    <string translatable="false" name="projection_grace_period_60_sec">60</string>
+    <string translatable="false" name="projection_grace_period_120_sec">120</string>
+
+    <string-array translatable="false" name="projection_grace_period_values">
+        <item>@string/projection_grace_period_disabled</item>
+        <item>@string/projection_grace_period_15_sec</item>
+        <item>@string/projection_grace_period_30_sec</item>
+        <item>@string/projection_grace_period_60_sec</item>
+        <item>@string/projection_grace_period_120_sec</item>
+    </string-array>
+
 
     <string translatable="false" name="key_privilege_mode">privilege_mode</string>
     <string translatable="false" name="key_operational_mode">operational_mode</string>
+
+    <string translatable="false" name="key_start_projection_when_locked">start_projection_when_locked</string>
+    <string translatable="false" name="key_projection_resume_grace_period">projection_resume_grace_period</string>
 </resources>

@@ -59,6 +59,14 @@
     <string name="cellular_network_badge_g">G</string>
     <string name="cellular_network_badge_unknown" />
     <string name="cellular_network_badge_none" />
+
     <string name="stop_button">stop</string>
+    <string name="pref_category_connection">connection</string>
+    <string name="unlock_device_before_connecting">For security, unlock your phone before connecting to your car</string>
+    <string name="unlock_your_phone">Unlock your phone to use Geargrinder</string>
+    <string name="start_projection_when_locked_pref_name">Allow starting connection while locked</string>
+    <string name="projection_resume_grace_period_pref_name">Connection resume grace period</string>
+    <string name="start_projection_when_locked_pref_summary_on">You can unlock your phone after connecting to your car</string>
+    <string name="start_projection_when_locked_pref_summary_off">You must unlock your phone before connecting to your car</string>
 
 </resources>

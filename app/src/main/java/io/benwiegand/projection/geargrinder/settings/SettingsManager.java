@@ -5,7 +5,11 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import android.util.Pair;
 
+import androidx.annotation.StringRes;
+
 import java.util.List;
+
+import io.benwiegand.projection.geargrinder.R;
 
 public class SettingsManager {
     private static final String TAG = SettingsManager.class.getSimpleName();
@@ -25,6 +29,27 @@ public class SettingsManager {
 
     public PrivilegeMode getPrivilegeMode() {
         return PrivilegeMode.read(context, prefs);
+    }
+
+    public boolean allowsStartProjectionWhenLocked() {
+        return prefs.getBoolean(context.getString(R.string.key_start_projection_when_locked), false);
+    }
+
+    public int getProjectionResumeGracePeriod() {
+        return castInt(R.string.key_projection_resume_grace_period, 30);
+    }
+
+    private int castInt(@StringRes int key, int defaultValue) {
+        String stringValue = prefs.getString(context.getString(key), null);
+        if (stringValue == null) return defaultValue;
+
+        try {
+            return Integer.parseInt(stringValue);
+        } catch (NumberFormatException e) {
+            Log.wtf(TAG, "failed to cast preference value to integer", e);
+            assert false;
+            return defaultValue;
+        }
     }
 
     public static <T> T enumForPref(Context context, SharedPreferences prefs, int key, int defaultValue, List<Pair<Integer, T>> mapping) {

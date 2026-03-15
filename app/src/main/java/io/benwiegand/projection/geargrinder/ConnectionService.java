@@ -3,6 +3,7 @@ package io.benwiegand.projection.geargrinder;
 import static io.benwiegand.projection.geargrinder.util.UsbUtil.findUsbHeadunit;
 
 import android.app.Activity;
+import android.app.KeyguardManager;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
@@ -37,6 +38,7 @@ import io.benwiegand.projection.geargrinder.projection.ProjectionService;
 import io.benwiegand.projection.geargrinder.protocol.AAConstants;
 import io.benwiegand.projection.geargrinder.callback.ControlListener;
 import io.benwiegand.projection.geargrinder.channel.ControlChannel;
+import io.benwiegand.projection.geargrinder.settings.SettingsManager;
 import io.benwiegand.projection.geargrinder.transfer.UsbTransferInterface;
 
 public class ConnectionService extends Service implements ControlListener {
@@ -57,11 +59,13 @@ public class ConnectionService extends Service implements ControlListener {
     private KeyManager[] keyManagers;
     private TrustManager[] trustManagers;
     private ConnectionNotificationService notificationService;
+    private SettingsManager settingsManager;
 
     private MediaProjection mediaProjection = null;
     private MediaProjectionRequestCallback mediaProjectionRequestCallback = null;
 
     private ProjectionService projectionService = null;
+    private Object projectionGracePeriodToken = null;
 
 
     @Override
@@ -70,6 +74,7 @@ public class ConnectionService extends Service implements ControlListener {
         Log.d(TAG, "on create");
 
         notificationService = new ConnectionNotificationService(this);
+        settingsManager = new SettingsManager(this);
 
         try {
             KeystoreManager keystoreManager = new KeystoreManager(this);
@@ -90,9 +95,10 @@ public class ConnectionService extends Service implements ControlListener {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "on destroy");
-        notificationService.destroy();
         if (connectionThread != null) connectionThread.interrupt();
         if (projectionService != null) projectionService.destroy();
+        if (mediaProjection != null) mediaProjection.stop();
+        notificationService.destroy();
     }
 
     @Nullable
@@ -120,16 +126,20 @@ public class ConnectionService extends Service implements ControlListener {
         return START_NOT_STICKY;
     }
 
+    private void stopConnectionLocked() {
+        Log.i(TAG, "stopping headunit connection");
+        if (connectionThread != null) connectionThread.interrupt();
+        if (projectionService != null) {
+            projectionService.destroy();
+            projectionService = null;
+        }
+
+        stopSelf();
+    }
+
     private void stopConnection() {
         synchronized (lock) {
-            Log.i(TAG, "stopping headunit connection");
-            if (connectionThread != null) connectionThread.interrupt();
-            if (projectionService != null) {
-                projectionService.destroy();
-                projectionService = null;
-            }
-
-            stopSelf();
+            stopConnectionLocked();
         }
     }
 
@@ -215,6 +225,19 @@ public class ConnectionService extends Service implements ControlListener {
         assert !Looper.getMainLooper().isCurrentThread();   // never run on main thread
 
         try {
+            synchronized (lock) {
+                if (!settingsManager.allowsStartProjectionWhenLocked() && projectionService == null) {
+                    KeyguardManager km = getSystemService(KeyguardManager.class);
+                    if (km.isKeyguardLocked()) {
+                        // this is currently default behavior since the keyguard modal in the projection activity is insecure
+                        Log.e(TAG, "blocking connection due to keyguard");
+                        notificationService.postError(R.string.unlock_your_phone, R.string.unlock_device_before_connecting);
+                        return;
+                    }
+                }
+                projectionGracePeriodToken = new Object();
+            }
+
             notificationService.setConnectionStatusText(R.string.looking_for_car);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 notificationService.addForegroundFlag(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
@@ -266,13 +289,46 @@ public class ConnectionService extends Service implements ControlListener {
             }
 
         } finally {
-            // die
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                notificationService.removeForegroundFlag(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
-            notificationService.setConnectionStatusText(R.string.looking_for_car);
-            connectionThread = null;
+            // suspend
+            synchronized (lock) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    notificationService.removeForegroundFlag(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+                notificationService.setConnectionStatusText(R.string.looking_for_car);
+                connectionThread = null;
+                suspendProjectionLocked();
+            }
+        }
+    }
 
-            if (projectionService != null) projectionService.suspend();
+    private void suspendProjectionLocked() {
+        if (projectionService == null) return;
+        if (projectionService.getError() != null) {
+            Log.w(TAG, "projection service terminated due to error");
+            stopConnectionLocked();
+            return;
+        }
+
+        long delay = settingsManager.getProjectionResumeGracePeriod() * 1000L;
+        if (delay <= 0) {
+            Log.i(TAG, "stopping projection due to user preference");
+            stopConnectionLocked();
+            return;
+        }
+
+        projectionService.suspend();
+
+        Object token = projectionGracePeriodToken;
+        boolean posted = handler.postDelayed(() -> {
+            synchronized (lock) {
+                if (token != projectionGracePeriodToken) return;
+                Log.i(TAG, "projection service grace period expired");
+                stopConnectionLocked();
+            }
+        }, delay);
+
+        if (!posted) {
+            Log.wtf(TAG, "failed to post for projection service grace period, killing immediately");
+            stopConnectionLocked();
         }
     }
 

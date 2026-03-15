@@ -32,5 +32,30 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:title="@string/pref_category_connection"
+        app:iconSpaceReserved="false"
+        >
+
+        <SwitchPreferenceCompat
+            app:key="@string/key_start_projection_when_locked"
+            app:iconSpaceReserved="false"
+            app:title="@string/start_projection_when_locked_pref_name"
+            app:defaultValue="false"
+            app:summaryOn="@string/start_projection_when_locked_pref_summary_on"
+            app:summaryOff="@string/start_projection_when_locked_pref_summary_off"
+            />
+
+        <ListPreference
+            app:key="@string/key_projection_resume_grace_period"
+            app:iconSpaceReserved="false"
+            app:title="@string/projection_resume_grace_period_pref_name"
+            app:entries="@array/projection_grace_period_entries"
+            app:entryValues="@array/projection_grace_period_values"
+            app:defaultValue="@string/projection_grace_period_30_sec"
+            app:useSimpleSummaryProvider="true"
+            />
+
+    </PreferenceCategory>
 
 </PreferenceScreen>

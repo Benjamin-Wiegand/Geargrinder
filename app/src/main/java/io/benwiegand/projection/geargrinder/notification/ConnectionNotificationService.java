@@ -42,6 +42,7 @@ public class ConnectionNotificationService {
 
     public void destroy() {
         context.stopForeground(STOP_FOREGROUND_REMOVE);
+        nm.cancel(FOREGROUND_NOTIFICATION_ID);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
