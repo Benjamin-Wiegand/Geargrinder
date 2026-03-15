@@ -206,8 +206,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
             });
 
             splitScreenLayout.addView(rootView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        } catch (IOException | PackageManager.NameNotFoundException e) {
-            Log.e(TAG, "failed to launch virtual activity", e);
+        } catch (Throwable t) {
+            Log.e(TAG, "failed to launch virtual activity", t);
             Toast.makeText(this, R.string.failed_to_launch_app, Toast.LENGTH_SHORT).show();
         }
     }

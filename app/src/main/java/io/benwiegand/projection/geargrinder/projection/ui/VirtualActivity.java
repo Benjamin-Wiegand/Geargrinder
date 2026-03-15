@@ -128,6 +128,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
             int result = privd.launchActivity(app.launchComponent(), getDisplayId());
             Log.d(TAG, "launch result " + result + " for " + app.launchComponent().flattenToShortString());
         } catch (Throwable t) {
+            destroy();
             throw new RuntimeException("failed to launch activity for virtual activity", t);
         }
     }
