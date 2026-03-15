@@ -41,7 +41,9 @@
     <string name="operational_mode_pref_name">Operational mode</string>
     <string name="shizuku_permission_request">Shizuku permission</string>
     <string name="shizuku_permission_rationale">Shizuku is used to access system APIs for a better user experience. Things like creating trusted virtual displays, injecting input events into said displays, etc.</string>
-    <string name="shizuku_not_running">Unable to connect to Shizuku, is Shizuku running?</string>
+    <string name="shizuku_not_running">Unable to connect to Shizuku. Please start Shizuku or choose a different privilege mode.</string>
+    <string name="shizuku_not_installed">Unable to connect to Shizuku. Please install and start Shizuku or choose a different privilege mode.</string>
+    <string name="launch_shizuku_button">launch Shizuku</string>
     <string name="shizuku_too_old">Please update Shizuku.</string>
     <string name="battery_percent_format" formatted="true">%d%%</string>
     <string name="pref_category_operations">operations</string>

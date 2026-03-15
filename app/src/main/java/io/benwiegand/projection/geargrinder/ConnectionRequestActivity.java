@@ -29,6 +29,7 @@ public class ConnectionRequestActivity extends AppCompatActivity {
 
     private static final String INTENT_ACTION_USB_PERMISSION_RESULT = "io.benwiegand.projection.geargrinder.USB_PERMISSION";
 
+    private static final String SHIZUKU_PACKAGE_NAME = "moe.shizuku.privileged.api";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -114,12 +115,26 @@ public class ConnectionRequestActivity extends AppCompatActivity {
 
                 if (Shizuku.getBinder() == null) {
                     Log.e(TAG, "shizuku binder is null. is shizuku running?");
-                    new AlertDialog.Builder(this)
+                    AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(this)
                             .setTitle(R.string.shizuku_permission_request)
+                            .setNegativeButton(R.string.close_button, (d, i) -> finish())
+                            .setPositiveButton(R.string.settings_button, (d, i) -> {
+                                startActivity(new Intent(this, SettingsActivity.class));
+                                finish();
+                            })
+                            .setCancelable(false);
+
+                    Intent shizukuLaunchIntent = getPackageManager().getLaunchIntentForPackage(SHIZUKU_PACKAGE_NAME);
+                    if (shizukuLaunchIntent != null) dialogBuilder
                             .setMessage(R.string.shizuku_not_running)
-                            .setPositiveButton(R.string.close_button, (d, i) -> finish())
-                            .setCancelable(false)
-                            .show();
+                            .setNeutralButton(R.string.launch_shizuku_button, (d, i) -> {
+                                startActivity(shizukuLaunchIntent);
+                                finish();
+                            });
+                    else dialogBuilder
+                            .setMessage(R.string.shizuku_not_installed);
+
+                    dialogBuilder.show();
                     return;
                 }
 
