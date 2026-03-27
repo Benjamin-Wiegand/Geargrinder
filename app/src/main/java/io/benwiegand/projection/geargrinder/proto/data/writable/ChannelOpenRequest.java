@@ -9,8 +9,8 @@ public record ChannelOpenRequest(
 
     public byte[] serialize() {
         return ProtoSerializer.serialize(
-                new ProtoSerializer.Proto32(1, priority()),
-                new ProtoSerializer.Proto32(2, channelId())
+                new ProtoSerializer.ProtoVarInt(1, priority()),
+                new ProtoSerializer.ProtoVarInt(2, channelId())
         );
     }
 }

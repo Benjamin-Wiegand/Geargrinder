@@ -9,8 +9,8 @@ public record AVStartIndication(
 
     public byte[] serialize() {
         return ProtoSerializer.serialize(
-                new ProtoSerializer.Proto32(1, session()),
-                new ProtoSerializer.Proto32(2, preset())
+                new ProtoSerializer.ProtoVarInt(1, session()),
+                new ProtoSerializer.ProtoVarInt(2, preset())
         );
     }
 

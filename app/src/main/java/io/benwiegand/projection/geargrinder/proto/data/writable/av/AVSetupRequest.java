@@ -20,7 +20,7 @@ public record AVSetupRequest(
 
     public byte[] serialize() {
         return ProtoSerializer.serialize(
-                new ProtoSerializer.Proto32(1, type())
+                new ProtoSerializer.ProtoVarInt(1, type())
         );
     }
 }
