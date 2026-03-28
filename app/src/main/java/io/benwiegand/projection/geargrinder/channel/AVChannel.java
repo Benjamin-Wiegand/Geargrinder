@@ -118,12 +118,12 @@ public abstract class AVChannel<T> implements MessageListener {
 
     protected void sendStartIndication(AVStartIndication startIndication) {
         Log.i(TAG, "sending start indication");
-        mb.sendMessage(controlParams, AV_CMD_START, startIndication.serialize());
+        mb.sendMessage(mediaParams, AV_CMD_START, startIndication.serialize());
     }
 
     protected void sendStopIndication() {
         Log.i(TAG, "sending stop indication");
-        mb.sendMessage(controlParams, AV_CMD_STOP, new byte[0]);
+        mb.sendMessage(mediaParams, AV_CMD_STOP, new byte[0]);
     }
 
     protected void sendAvBuffer(int offset, int length) {
@@ -165,7 +165,7 @@ public abstract class AVChannel<T> implements MessageListener {
                 }
 
                 Log.i(TAG, "sending av setup request");
-                mb.sendMessage(controlParams, AV_CMD_SETUP_REQUEST, getAvSetupRequest().serialize());
+                mb.sendMessage(mediaParams, AV_CMD_SETUP_REQUEST, getAvSetupRequest().serialize());
             }
             case AV_CMD_SETUP_RESPONSE -> {
                 AVSetupResponse response = AVSetupResponse.parse(buffer, payloadOffset + COMMAND_ID_LENGTH, payloadLength - COMMAND_ID_LENGTH);
