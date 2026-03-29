@@ -4,7 +4,7 @@ public class IPCConstants {
 
     public static final long PING_INTERVAL = 1000;
     public static final long PING_TIMEOUT = 5000;
-    public static final long BIND_TIMEOUT = 7000;
+    public static final long BIND_TIMEOUT = 20000;
 
     public static final int TOKEN_LENGTH = 1024;
 

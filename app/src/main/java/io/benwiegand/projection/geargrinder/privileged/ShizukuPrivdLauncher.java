@@ -21,7 +21,7 @@ import rikka.shizuku.Shizuku;
 public class ShizukuPrivdLauncher extends PrivdLauncher implements GeargrinderServiceConnector.ConnectionListener {
     private static final String TAG = ShizukuPrivdLauncher.class.getSimpleName();
 
-    private static final long SHIZUKU_CONNECTION_TIMEOUT = 10000;
+    private static final long SHIZUKU_CONNECTION_TIMEOUT = 20000;
 
     private final Object lock = new Object();
 
