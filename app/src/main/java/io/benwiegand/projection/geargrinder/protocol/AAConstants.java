@@ -16,6 +16,8 @@ public class AAConstants {
     public static final int CMD_SERVICE_DISCOVERY_RESPONSE = 0x0006;
     public static final int CMD_PING_REQUEST = 0x000b;
     public static final int CMD_PING_RESPONSE = 0x000c;
+    public static final int CMD_AUDIO_FOCUS_REQUEST = 0x0012;
+    public static final int CMD_AUDIO_FOCUS_RESPONSE = 0x0013;
 
 
     // all channels

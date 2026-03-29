@@ -22,10 +22,12 @@ import io.benwiegand.projection.geargrinder.crypto.TLSService;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.callback.MessageListener;
 import io.benwiegand.projection.geargrinder.projection.ProjectionService;
+import io.benwiegand.projection.geargrinder.proto.data.readable.AudioFocusResponse;
 import io.benwiegand.projection.geargrinder.proto.data.readable.PingRequest;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.AudioChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
+import io.benwiegand.projection.geargrinder.proto.data.writable.AudioFocusRequest;
 import io.benwiegand.projection.geargrinder.proto.data.writable.PingResponse;
 import io.benwiegand.projection.geargrinder.proto.data.writable.ServiceDiscoveryRequest;
 import io.benwiegand.projection.geargrinder.proto.data.readable.ServiceDiscoveryResponse;
@@ -110,6 +112,8 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
 
     private void startProjection() {
         ProjectionService projectionService = connectionServiceBinder.getOrCreateGeargrinderProjectionService(this);
+
+        mb.sendMessage(encryptedParams, CMD_AUDIO_FOCUS_REQUEST, new AudioFocusRequest(AudioFocusRequest.Type.GAIN).serialize());
 
         if (videoChannelMeta != null) {
             Log.d(TAG, "init video channel");
@@ -262,6 +266,11 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
                 handleServiceDiscoveryResponse(response);
                 startProjection();
 
+            }
+
+            case CMD_AUDIO_FOCUS_RESPONSE -> {
+                AudioFocusResponse response = AudioFocusResponse.parse(buffer, payloadOffset + COMMAND_ID_LENGTH, payloadLength - COMMAND_ID_LENGTH);
+                Log.d(TAG, "audio focus response: " + response);
             }
 
             default -> {
