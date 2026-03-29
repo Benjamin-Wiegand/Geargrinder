@@ -38,18 +38,8 @@ public class VideoChannel extends AVChannel<VideoPreset> {
 
     private final VideoChannelMeta channelMeta;
 
-    private static int calculateVideoBufferSize(MessageBroker mb) {
-        int bufferSize = VIDEO_BUFFER_MAX_LENGTH;
-        int maxPayload = mb.getMaxPayloadSize(true);
-        if (bufferSize > maxPayload) {
-            Log.w(TAG, "limiting video buffer to " + maxPayload + " bytes due to max payload size");
-            bufferSize = maxPayload;
-        }
-        return bufferSize;
-    }
-
     public VideoChannel(MessageBroker mb, ProjectionService projectionService, VideoChannelMeta channelMeta) {
-        super(mb, channelMeta.channelId(), 0, calculateVideoBufferSize(mb));
+        super(mb, channelMeta.channelId(), 0, VIDEO_BUFFER_MAX_LENGTH);
         this.channelMeta = channelMeta;
         this.projectionService = projectionService;
     }

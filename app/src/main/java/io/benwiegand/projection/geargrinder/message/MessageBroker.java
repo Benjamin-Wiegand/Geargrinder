@@ -25,13 +25,6 @@ import io.benwiegand.projection.geargrinder.util.ByteUtil;
 public class MessageBroker {
     private static final String TAG = MessageBroker.class.getSimpleName();
 
-    /**
-     * how many buffers to allocate for writing sequences.
-     * each buffer uses {@link AAFrame#MAX_LENGTH} bytes.
-     */
-//    private static final int WRITE_BUFFERS = 4;
-    private static final int WRITE_BUFFERS = 8; // TODO
-
     private static final int INIT_PAYLOAD_BUFFER_SIZE = PAYLOAD_MAX_LENGTH;
 
     // logs payloads for debugging
@@ -43,10 +36,9 @@ public class MessageBroker {
 
     // max outbound length is 16 KiB but frames are technically capable of an additional 8 bytes beyond that
     private final byte[] readBuffer = new byte[AAFrame.MAX_LENGTH + EXTENDED_HEADER_LENGTH];
-    private final byte[] auxReadBuffer = new byte[AAFrame.MAX_LENGTH + EXTENDED_HEADER_LENGTH];
     private byte[] readMessageBuffer = new byte[INIT_PAYLOAD_BUFFER_SIZE];
 
-    private final byte[][] writeBuffers = new byte[WRITE_BUFFERS][AAFrame.MAX_LENGTH];
+    private final byte[] writeBuffer = new byte[AAFrame.MAX_LENGTH];
 
     private final AATransferInterface transferInterface;
     private final TLSService tlsService;
@@ -87,12 +79,6 @@ public class MessageBroker {
 
     public boolean isAlive() {
         return transferInterface.alive();
-    }
-
-    public int getMaxPayloadSize(boolean encrypted) {
-        if (encrypted)
-            return tlsService.getMaxPlaintextSize(EXTENDED_PAYLOAD_MAX_LENGTH) + tlsService.getMaxPlaintextSize(PAYLOAD_MAX_LENGTH) * (writeBuffers.length - 1);
-        return EXTENDED_PAYLOAD_MAX_LENGTH + PAYLOAD_MAX_LENGTH * (writeBuffers.length - 1);
     }
 
     private int calculateSequenceLength(int extendedPayloadMaxLength, int payloadMaxLength, int length) {
@@ -142,13 +128,10 @@ public class MessageBroker {
                 int payloadMaxLength = params.encrypted() ? tlsService.getMaxPlaintextSize(PAYLOAD_MAX_LENGTH) : PAYLOAD_MAX_LENGTH;
                 int sequenceLength = calculateSequenceLength(extendedPayloadMaxLength, payloadMaxLength, length);
 
-                if (sequenceLength > writeBuffers.length)
-                    throw new IndexOutOfBoundsException("not enough write buffers to send message of size " + length);
-
                 // single frame
                 if (sequenceLength == 1) {
                     int flags = params.getFlags() | FLAG_SEQUENCE_FIRST | FLAG_SEQUENCE_LAST;
-                    AAFrame frame = new AAFrame(writeBuffers[0], flags)
+                    AAFrame frame = new AAFrame(writeBuffer, flags)
                             .setChannelId(params.channelId());
 
                     if (params.encrypted()) {
@@ -161,41 +144,32 @@ public class MessageBroker {
                     return;
                 }
 
-                // split into sequence
-                AAFrame[] frames = new AAFrame[sequenceLength];
-                boolean firstInSequence, lastInSequence;
-                int flags;
-                int curOffset = offset;
-                int curLength = Math.min(length, extendedPayloadMaxLength);
+                // multi-frame
+                Log.v(TAG, "multi-frame message of len " + sequenceLength);
+                int payloadOffset = offset;
+                int payloadRemaining = length;
+                int payloadLength;
                 for (int i = 0; i < sequenceLength; i++) {
-                    firstInSequence = curOffset == offset;
-                    lastInSequence = offset + length == curOffset + curLength;
-                    flags = params.getFlags()
-                            | (firstInSequence ? FLAG_SEQUENCE_FIRST : 0)
-                            | (lastInSequence ? FLAG_SEQUENCE_LAST : 0);
+                    int flags = params.getFlags();
+                    if (i == 0) flags |= FLAG_SEQUENCE_FIRST;
+                    if (i == sequenceLength - 1) flags |= FLAG_SEQUENCE_LAST;
 
-                    frames[i] = new AAFrame(writeBuffers[i], flags)
+                    AAFrame frame = new AAFrame(writeBuffer, flags)
                             .setChannelId(params.channelId());
 
-                    if (params.encrypted()) {
-                        tlsService.encrypt(payload, curOffset, curLength, frames[i]::copyPayload);
+                    if (i == 0) {
+                        frame.setTotalMessageLength(length);
+                        payloadLength = Math.min(extendedPayloadMaxLength, payloadRemaining);
                     } else {
-                        frames[i].copyPayload(payload, curOffset, curLength);
+                        payloadLength = Math.min(payloadMaxLength, payloadRemaining);
                     }
 
-                    curOffset += curLength;
-                    curLength = Math.min(length - (curOffset - offset), payloadMaxLength);
-                }
-
-                // first in sequence must have total length
-                // but the total length is unknown if encrypted
-                int totalLength = 0;
-                for (AAFrame frame : frames)
-                    totalLength += frame.getPayloadLength();
-                frames[0].setTotalMessageLength(totalLength);
-
-                for (AAFrame frame : frames)
+                    tlsService.encrypt(payload, payloadOffset, payloadLength, frame::copyPayload);
                     sendFrame(frame);
+
+                    payloadOffset += payloadLength;
+                    payloadRemaining -= payloadLength;
+                }
 
             } catch (IOException e) {
                 Log.e(TAG, "IOException while sending message", e);
@@ -244,18 +218,18 @@ public class MessageBroker {
         messageHandlers.put(channelId, handler);
     }
 
-    private AAFrame readFrame(byte[] buffer) throws IOException {
+    private AAFrame readFrame() throws IOException {
         int len = 0;
         while (len == 0) {
-            len = transferInterface.readFrame(buffer);
+            len = transferInterface.readFrame(readBuffer);
             if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received frame: len = " + len);
-            if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX raw: " + ByteUtil.hexDump(buffer, 0, len));
+            if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX raw: " + ByteUtil.hexDump(readBuffer, 0, len));
             if (len == 0) Log.w(TAG, "got empty frame");
         }
 
         if (len < HEADER_LENGTH) throw new RuntimeException("transfer too short");
 
-        AAFrame frame = new AAFrame(buffer);
+        AAFrame frame = new AAFrame(readBuffer);
         if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received frame: " + frame);
 
         if (frame.getLength() < len) {
@@ -268,8 +242,9 @@ public class MessageBroker {
     }
 
     private void readMessage() throws IOException {
-        AAFrame frame = readFrame(readBuffer);
-        int messageLength = 0;  // differs with encryption
+        AAFrame frame = readFrame();
+        int messageLength = 0;
+        int messageIndex = 0;
 
         // can't decrypt with no keys
         if (frame.isPayloadEncrypted() && tlsService.needsHandshake()) {
@@ -277,58 +252,69 @@ public class MessageBroker {
             throw new AssertionError("received encrypted message before ssl/tls handshake");
         }
 
+        // should always start with first frame
+        if (frame.isInSequence() && !frame.isFirstInSequence()) {
+            Log.wtf(TAG, "multi-frame message didn't start with first frame");
+            throw new AssertionError("multi-frame message didn't start with first frame");
+        }
+
+        // multi-frame length
+        if (frame.isFirstInSequence()) {
+            messageLength = frame.getTotalMessageLength();
+            growReadMessageBufferIfNeeded(frame.getTotalMessageLength(), 0);
+        } else if (!frame.isPayloadEncrypted()) {
+            messageLength = frame.getTotalMessageLength();
+            growReadMessageBufferIfNeeded(messageLength, 0);
+        }
+
         // decrypt first frame
         if (frame.isPayloadEncrypted()) {
-            messageLength += tlsService.decrypt(readBuffer, frame.getPayloadOffset(), frame.getPayloadLength(), out -> {
+            int firstDecryptedPayloadLength = tlsService.decrypt(frame.getBuffer(), frame.getPayloadOffset(), frame.getPayloadLength(), out -> {
                 int decryptedLength = out.remaining();
                 growReadMessageBufferIfNeeded(decryptedLength, 0);
                 out.get(readMessageBuffer, 0, decryptedLength);
                 return decryptedLength;
             });
+
+            messageIndex += firstDecryptedPayloadLength;
+            if (!frame.isInSequence())
+                messageLength = firstDecryptedPayloadLength;
+
         } else {
-            messageLength = frame.getTotalMessageLength();
-            growReadMessageBufferIfNeeded(messageLength, 0);
             System.arraycopy(frame.getBuffer(), frame.getPayloadOffset(), readMessageBuffer, 0, frame.getPayloadLength());
+            messageIndex = frame.getPayloadLength();
         }
 
         // multi-frame messages
         if (frame.isFirstInSequence()) {
-
-            int rawMessageLength = frame.getPayloadLength();
-
-            AAFrame nFrame;
+            boolean encrypted = frame.isPayloadEncrypted();
+            int channelId = frame.getChannelId();
+            frame = readFrame();
             do {
-                nFrame = readFrame(auxReadBuffer);
-                if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received next frame in sequence: " + nFrame);
-                if (!nFrame.isInSequence() || nFrame.isFirstInSequence() || nFrame.getChannelId() != frame.getChannelId() || nFrame.isPayloadEncrypted() != frame.isPayloadEncrypted())
-                    throw new AssertionError("broken frame sequence: first=" + frame + ", n=" + nFrame);
+                readFrame();
+                if (LOG_MESSAGE_DEBUG) Log.d(TAG, "received next frame in sequence: " + frame);
+                if (!frame.isInSequence() || frame.isFirstInSequence() || frame.getChannelId() != channelId || frame.isPayloadEncrypted() != encrypted)
+                    throw new AssertionError("broken frame sequence: channelId=" + channelId + ", encrypted=" + encrypted + ", frame=" + frame);
 
-                // decrypt
                 if (frame.isPayloadEncrypted()) {
-                    int curMessageLength = messageLength;
-                    messageLength += tlsService.decrypt(auxReadBuffer, nFrame.getPayloadOffset(), nFrame.getPayloadLength(), out -> {
+                    int curMessageIndex = messageIndex;
+                    messageIndex += tlsService.decrypt(frame.getBuffer(), frame.getPayloadOffset(), frame.getPayloadLength(), out -> {
                         int decryptedLength = out.remaining();
-                        growReadMessageBufferIfNeeded(curMessageLength + decryptedLength, curMessageLength);
-                        out.get(readMessageBuffer, curMessageLength, decryptedLength);
+                        out.get(readMessageBuffer, curMessageIndex, decryptedLength);
                         return decryptedLength;
                     });
                 } else {
-                    System.arraycopy(nFrame.getBuffer(), nFrame.getPayloadOffset(), readMessageBuffer, rawMessageLength, nFrame.getPayloadLength());
+                    System.arraycopy(frame.getBuffer(), frame.getPayloadOffset(), readMessageBuffer, messageIndex, frame.getPayloadLength());
+                    messageIndex += frame.getPayloadLength();
                 }
 
-                rawMessageLength += nFrame.getPayloadLength();
-
-            } while (!nFrame.isLastInSequence());
-
-            // TODO: still need to determine if padding is allowed and could cause this
-            if (rawMessageLength < frame.getTotalMessageLength())
-                Log.w(TAG, "message length miss-match: read=" + rawMessageLength + " expect=" + frame.getTotalMessageLength(), new AssertionError());
-
-        } else if (frame.isInSequence()) {
-            throw new IOException("frame sequence out of order");
+            } while (!frame.isLastInSequence());
         }
 
         if (LOG_MESSAGE_DEBUG) Log.d(TAG, "RX message: " + ByteUtil.hexDump(readMessageBuffer, 0, messageLength));
+
+        if (messageIndex != messageLength)
+            throw new AssertionError("message length miss-match: read=" + messageIndex + " expect=" + messageLength);
 
         // callback
         MessageListener handler = messageHandlers.get(frame.getChannelId());
