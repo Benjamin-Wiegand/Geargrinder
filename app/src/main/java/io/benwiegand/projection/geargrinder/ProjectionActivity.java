@@ -148,6 +148,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         super.onDestroy();
         Log.d(TAG, "onDestroy");
 
+        connector.getPackageBinder().ifPresent(b -> b.unregisterListener(this::onPackageListUpdated));
+
         for (VirtualActivity virtualActivity : virtualActivities.values())
             virtualActivity.destroy();
         virtualActivities.clear();
@@ -265,12 +267,17 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         binder.requestDaemon(ProjectionActivity.this);
     }
 
+    private void onPackageListUpdated(PackageService.ServiceBinder binder) {
+        // TODO: temporary
+        binder.getAppsFor(AppCategory.FOCUSED)
+                .forEach(appDock::addApp);
+    }
+
     @Override
     public void onPackageServiceConnected(PackageService.ServiceBinder binder) {
         appDrawer.setPackageBinder(binder);
         notificationDisplay.setPackageServiceBinder(binder);
-        binder.registerListener(b -> b.getAppsFor(AppCategory.FOCUSED)
-                .forEach(appDock::addApp));
+        binder.registerListener(this::onPackageListUpdated);
     }
 
     @Override

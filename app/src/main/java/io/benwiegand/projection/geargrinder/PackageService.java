@@ -150,6 +150,12 @@ public class PackageService extends Service {
             }
         }
 
+        public void unregisterListener(PackageServiceListener listener) {
+            synchronized (listeners) {
+                listeners.remove(listener);
+            }
+        }
+
         public List<AppRecord> getAllApps() {
             synchronized (appListUpdateLock) {
                 return allApps;

@@ -106,6 +106,7 @@ public class AppDrawer implements PackageService.PackageServiceListener, TabLayo
 
     public void destroy() {
         adapter.destroy();
+        if (packageBinder != null) packageBinder.unregisterListener(this);
     }
 
     private void onLayoutUpdated() {
