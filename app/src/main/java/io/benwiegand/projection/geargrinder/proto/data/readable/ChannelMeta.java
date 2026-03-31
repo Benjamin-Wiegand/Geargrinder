@@ -9,6 +9,7 @@ import java.util.Map;
 import io.benwiegand.projection.geargrinder.proto.ProtoParser;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.AVChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
+import io.benwiegand.projection.geargrinder.proto.data.readable.sensor.SensorChannelMeta;
 
 public interface ChannelMeta {
     int channelId();
@@ -30,6 +31,11 @@ public interface ChannelMeta {
 
             ProtoParser.ProtoVarData metaField;
 
+            // sensor channel meta
+            metaField = ProtoParser.getSingle(fields.get(2), ProtoParser.ProtoVarData.class);
+            if (metaField != null)
+                return SensorChannelMeta.parse(channelId, buffer, metaField.offset(), metaField.length());
+
             // AV channel meta
             metaField = ProtoParser.getSingle(fields.get(3), ProtoParser.ProtoVarData.class);
             if (metaField != null)
@@ -41,8 +47,7 @@ public interface ChannelMeta {
                 return InputChannelMeta.parse(channelId, buffer, metaField.offset(), metaField.length());
 
             // known fields but not yet parsed/implemented
-            for (int fieldNumber : new int[] {2, 5, 6, 8, 12}) {
-                // field 2: sensor channel
+            for (int fieldNumber : new int[] {5, 6, 8, 12}) {
                 // field 5: av/mic input channel
                 // field 6: bluetooth channel
                 // field 8: navigation channel

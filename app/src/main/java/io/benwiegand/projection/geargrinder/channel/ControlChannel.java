@@ -27,6 +27,7 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.PingRequest;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.AudioChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
+import io.benwiegand.projection.geargrinder.proto.data.readable.sensor.SensorChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.writable.AudioFocusRequest;
 import io.benwiegand.projection.geargrinder.proto.data.writable.PingResponse;
 import io.benwiegand.projection.geargrinder.proto.data.writable.ServiceDiscoveryRequest;
@@ -55,10 +56,12 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
     private VideoChannel videoChannel = null;
     private AudioChannel mediaAudioChannel = null;
     private InputChannel inputChannel = null;
+    private SensorChannel sensorChannel = null;
 
     private VideoChannelMeta videoChannelMeta = null;
     private AudioChannelMeta mediaAudioChannelMeta = null;
     private InputChannelMeta inputChannelMeta = null;
+    private SensorChannelMeta sensorChannelMeta = null;
 
     public ControlChannel(Context context, MessageBroker mb, TLSService tlsService, ControlListener controlListener, SettingsManager settingsManager, ConnectionService.ServiceBinder connectionServiceBinder) {
         this.context = context;
@@ -104,6 +107,11 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
                 Log.d(TAG, "found input channel: " + inputChannelMeta);
                 if (!inputChannelMeta.hasTouchScreen()) Log.w(TAG, "no touch screen found");
             }
+            case SensorChannelMeta scm -> {
+                if (sensorChannelMeta != null) Log.w(TAG, "multiple sensor channels detected.");  // this probably won't happen
+                sensorChannelMeta = scm;
+                Log.d(TAG, "found sensor channel: " + sensorChannelMeta);
+            }
             case null -> {}
             default -> Log.d(TAG, "found channel: " + channelMeta);
         }
@@ -111,6 +119,7 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
         if (videoChannelMeta == null) Log.w(TAG, "can't start video: no video channel");
         if (mediaAudioChannelMeta == null) Log.w(TAG, "can't start audio: no media audio channel");
         if (inputChannelMeta == null) Log.w(TAG, "can't start input: no input channel");
+        if (sensorChannelMeta == null) Log.w(TAG, "can't start sensors: no sensor channel");
     }
 
     private void startProjection() {
@@ -156,6 +165,13 @@ public class ControlChannel implements MessageListener, ProjectionService.Listen
             inputChannel.openChannel();
             projectionService.setInput(inputChannel);
         }
+
+        if (sensorChannelMeta != null) {
+            Log.d(TAG, "init sensor channel");
+            sensorChannel = new SensorChannel(mb, sensorChannelMeta);
+            sensorChannel.openChannel();
+        }
+
     }
 
     @Override

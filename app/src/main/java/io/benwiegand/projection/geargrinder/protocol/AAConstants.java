@@ -40,4 +40,10 @@ public class AAConstants {
     public static final int INPUT_CMD_EVENT = 0x8001;
     public static final int INPUT_CMD_BINDING_REQUEST = 0x8002;
     public static final int INPUT_CMD_BINDING_RESPONSE = 0x8003;
+
+    // sensor channel messages
+    public static final int SENSOR_CMD_START_REQUEST = 0x8001;
+    public static final int SENSOR_CMD_START_RESPONSE = 0x8002;
+    public static final int SENSOR_CMD_EVENT_INDICATION = 0x8003;
+
 }
