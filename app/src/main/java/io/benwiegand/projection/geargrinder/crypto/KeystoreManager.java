@@ -4,7 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import org.bouncycastle.asn1.x509.X509Name;
-import org.bouncycastle.x509.X509V3CertificateGenerator;
+import org.bouncycastle.x509.X509V1CertificateGenerator;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -193,7 +193,7 @@ public class KeystoreManager {
     private Certificate signKeypair(KeyPair keypair) {
         try {
             Log.d(TAG, "self-signing keypair with X509");
-            X509V3CertificateGenerator certgen = new X509V3CertificateGenerator();
+            X509V1CertificateGenerator certgen = new X509V1CertificateGenerator();
             X509Name commonName = new X509Name("CN=" + CERTIFICATE_COMMON_NAME);
             certgen.setIssuerDN(commonName);
             certgen.setSubjectDN(commonName);
