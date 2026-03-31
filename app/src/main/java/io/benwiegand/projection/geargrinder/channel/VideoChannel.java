@@ -9,10 +9,12 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.projection.ProjectionService;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.VideoChannelMeta;
+import io.benwiegand.projection.geargrinder.proto.data.readable.av.VideoFocusIndication;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.VideoPreset;
 import io.benwiegand.projection.geargrinder.proto.data.writable.av.AVSetupRequest;
 import io.benwiegand.projection.geargrinder.proto.data.writable.av.AVStartIndication;
@@ -55,6 +57,15 @@ public class VideoChannel extends AVChannel<VideoPreset> {
         this.channelMeta = channelMeta;
         this.projectionService = projectionService;
         this.settingsManager = settingsManager;
+    }
+
+    @Override
+    protected void onVideoFocusIndication(VideoFocusIndication indication) {
+        switch (indication.focusType()) {
+            case FOCUSED -> start();
+            case UNFOCUSED -> stop();
+            case UNKNOWN -> Log.wtf(TAG, "video focus type is unknown", new AssertionError());
+        }
     }
 
     @Override
@@ -102,7 +113,7 @@ public class VideoChannel extends AVChannel<VideoPreset> {
     }
 
     @Override
-    protected void avLoop() {
+    protected void avLoop(Supplier<Boolean> runCondition) {
         Log.i(TAG, "video loop start");
         long lastFrameGeneratedAt = 0;
         long minFrameInterval, frameTs, timeToNextFrame;
@@ -150,7 +161,7 @@ public class VideoChannel extends AVChannel<VideoPreset> {
                     avPreset.preset()
             );
 
-            while (!dead) {
+            while (runCondition.get()) {
                 waitForAck(AV_ACK_TIMEOUT);
 
                 timeToNextFrame = minFrameInterval - (SystemClock.elapsedRealtime() - lastFrameGeneratedAt);

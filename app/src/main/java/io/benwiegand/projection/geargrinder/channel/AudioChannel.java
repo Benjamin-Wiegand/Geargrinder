@@ -8,9 +8,11 @@ import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeUInt16;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 import io.benwiegand.projection.geargrinder.projection.audio.AudioCapture;
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
+import io.benwiegand.projection.geargrinder.proto.data.readable.av.AVSetupResponse;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.AudioChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.preset.AudioPreset;
 import io.benwiegand.projection.geargrinder.proto.data.writable.av.AVSetupRequest;
@@ -51,6 +53,11 @@ public class AudioChannel extends AVChannel<AudioPreset> {
         this.audioCaptureProvider = audioCaptureProvider;
     }
 
+    @Override
+    protected void onAvSetupResponse(AVSetupResponse response) {
+        super.onAvSetupResponse(response);
+        start();
+    }
 
     @Override
     protected void updatePresets(int[] acceptedPresets) {
@@ -96,7 +103,7 @@ public class AudioChannel extends AVChannel<AudioPreset> {
     }
 
     @Override
-    protected void avLoop() {
+    protected void avLoop(Supplier<Boolean> runCondition) {
         Log.i(TAG, "audio loop start");
         int silence = 0;
         AudioCapture.Result result = new AudioCapture.Result();
@@ -132,7 +139,7 @@ public class AudioChannel extends AVChannel<AudioPreset> {
         try {
             sendStartIndication(new AVStartIndication(0, avPreset.index()));
 
-            while (!dead) {
+            while (runCondition.get()) {
                 if (!waitForAck(AV_ACK_TIMEOUT)) continue;
 
                 audioCapture.nextBuffer(result, buffer, AUDIO_BUFFER_RESERVED, buffer.length - AUDIO_BUFFER_RESERVED);

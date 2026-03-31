@@ -16,11 +16,14 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import io.benwiegand.projection.geargrinder.message.MessageBroker;
 import io.benwiegand.projection.geargrinder.callback.MessageListener;
 import io.benwiegand.projection.geargrinder.proto.data.readable.av.AVSetupResponse;
 import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelOpenResponse;
+import io.benwiegand.projection.geargrinder.proto.data.readable.av.VideoFocusIndication;
 import io.benwiegand.projection.geargrinder.proto.data.writable.av.AVSetupRequest;
 import io.benwiegand.projection.geargrinder.proto.data.writable.av.AVStartIndication;
 import io.benwiegand.projection.geargrinder.proto.data.writable.ChannelOpenRequest;
@@ -42,6 +45,7 @@ public abstract class AVChannel<T> implements MessageListener {
 
     private final Object avThreadLock = new Object();
     private Thread avThread = null;
+    private Runnable stopAvThreadRunnable = null;
 
     protected final byte[] buffer;
 
@@ -71,6 +75,7 @@ public abstract class AVChannel<T> implements MessageListener {
 
     public void destroy() {
         dead = true;
+        stop();
     }
 
     public void openChannel() {
@@ -111,8 +116,36 @@ public abstract class AVChannel<T> implements MessageListener {
 
             outstandingAcks = 0;
 
-            avThread = new Thread(this::avLoop);
+            AtomicBoolean runBool = new AtomicBoolean(true);
+            stopAvThreadRunnable = () -> runBool.set(false);
+            avThread = new Thread(() -> {
+                try {
+                    avLoop(runBool::get);
+                } finally {
+                    avThread = null;
+                }
+            });
+
+            Log.i(TAG, "starting av thread");
             avThread.start();
+        }
+    }
+
+    protected void stop() {
+        synchronized (avThreadLock) {
+            if (avThread == null) {
+                Log.w(TAG, "av thread not running");
+                return;
+            }
+
+            if (stopAvThreadRunnable == null) {
+                Log.w(TAG, "av thread already stopping");
+                return;
+            }
+
+            Log.i(TAG, "stopping av thread");
+            stopAvThreadRunnable.run();
+            stopAvThreadRunnable = null;
         }
     }
 
@@ -131,8 +164,34 @@ public abstract class AVChannel<T> implements MessageListener {
         expectAck();
     }
 
+    protected void onAvSetupResponse(AVSetupResponse response) {
+        switch (response.status()) {
+            case OK, NO_ERROR -> {}
+            case UNKNOWN -> Log.w(TAG, "av setup status unknown");
+            case ERROR -> {
+                Log.e(TAG, "av setup failed");
+                // TODO: terminate connection
+                return;
+            }
+        }
+
+        maxOutstandingAcks = response.maxOutstandingAck();
+        if (maxOutstandingAcks > MAX_OUTSTANDING_ACK_LIMIT) {
+            // some headunits return excessive numbers for this which causes latency issues
+            Log.w(TAG, "limiting maxOutstandingAcks from " + maxOutstandingAcks + " to " + MAX_OUTSTANDING_ACK_LIMIT);
+            maxOutstandingAcks = MAX_OUTSTANDING_ACK_LIMIT;
+        }
+
+        updatePresets(response.acceptedPresets());
+    }
+
+    protected void onVideoFocusIndication(VideoFocusIndication indication) {
+        Log.wtf(TAG, "got an unhandled video focus indication: " + indication, new AssertionError());
+        assert false;
+    }
+
     protected abstract void updatePresets(int[] acceptedPresets);
-    protected abstract void avLoop();
+    protected abstract void avLoop(Supplier<Boolean> runCondition);
 
     protected abstract AVSetupRequest getAvSetupRequest();
 
@@ -176,33 +235,22 @@ public abstract class AVChannel<T> implements MessageListener {
                     return;
                 }
 
-                switch (response.status()) {
-                    case OK, NO_ERROR -> {}
-                    case UNKNOWN -> Log.w(TAG, "av setup status unknown");
-                    case ERROR -> {
-                        Log.e(TAG, "av setup failed");
-                        // TODO: terminate connection
-                        return;
-                    }
-                }
-
-                maxOutstandingAcks = response.maxOutstandingAck();
-                if (maxOutstandingAcks > MAX_OUTSTANDING_ACK_LIMIT) {
-                    // some headunits return excessive numbers for this which causes latency issues
-                    Log.w(TAG, "limiting maxOutstandingAcks from " + maxOutstandingAcks + " to " + MAX_OUTSTANDING_ACK_LIMIT);
-                    maxOutstandingAcks = MAX_OUTSTANDING_ACK_LIMIT;
-                }
-
-                updatePresets(response.acceptedPresets());
-
-                start();
+                onAvSetupResponse(response);
             }
             case AV_CMD_MEDIA_ACK -> {
+                // TODO: unparsed
                 onAck();
             }
             case AV_CMD_VIDEO_FOCUSED -> {
-                Log.d(TAG, "video focus indication");
-                // TODO: more unparsed
+                VideoFocusIndication indication = VideoFocusIndication.parse(buffer, payloadOffset + COMMAND_ID_LENGTH, payloadLength - COMMAND_ID_LENGTH);
+                Log.v(TAG, "video focus indication: " + indication);
+                if (indication == null) {
+                    Log.e(TAG, "failed to parse video focus indication");
+                    assert false;
+                    return;
+                }
+
+                onVideoFocusIndication(indication);
             }
 
             default -> {
