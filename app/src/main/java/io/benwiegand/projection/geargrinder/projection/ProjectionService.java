@@ -83,8 +83,8 @@ public class ProjectionService implements InputEventConverter.ConvertedInputEven
         this.videoPreset = videoPreset;
 
         CoordinateTranslator<TouchEvent.PointerLocation> coordinateTranslator = CoordinateTranslator.createTouchEvent(
-                x -> x + videoPreset.marginHorizontal() / 2,
-                y -> y + videoPreset.marginVertical() / 2
+                x -> x + this.videoPreset.marginHorizontal() / 2,
+                y -> y + this.videoPreset.marginVertical() / 2
         );
         inputEventConverter = new InputEventConverter(InputChannelMeta.getDefault(), this, coordinateTranslator, 0, videoPreset.width(), videoPreset.height());
 
