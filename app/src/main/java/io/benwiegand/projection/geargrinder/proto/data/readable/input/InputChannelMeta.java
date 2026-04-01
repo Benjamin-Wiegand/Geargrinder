@@ -12,7 +12,7 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelMeta;
 
 public record InputChannelMeta(
         int channelId,
-        int[] keycodes,
+        long[] keycodes,
         TouchInputMeta touchScreenMeta,
         TouchInputMeta touchPadMeta
 ) implements ChannelMeta {
@@ -23,14 +23,14 @@ public record InputChannelMeta(
     }
 
     public static InputChannelMeta getDefault() {
-        return new InputChannelMeta(-1, new int[0], null, null);
+        return new InputChannelMeta(-1, new long[0], null, null);
     }
 
     public static InputChannelMeta parse(int channelId, byte[] buffer, int offset, int length) {
         try {
             Map<Integer, List<ProtoParser.ProtoField>> fields = ProtoParser.parse(buffer, offset, length);
 
-            int[] keyCodes = ProtoParser.getUnsignedInteger32Array(buffer, fields.get(1));
+            long[] keyCodes = ProtoParser.getUnsignedIntegerArray(buffer, fields.get(1));
 
             ProtoParser.ProtoVarData touchScreenMetaField = ProtoParser.getSingle(fields.get(2), ProtoParser.ProtoVarData.class);
             TouchInputMeta touchScreenMeta = touchScreenMetaField == null ? null : TouchInputMeta.parse(buffer, touchScreenMetaField.offset(), touchScreenMetaField.length());

@@ -2,7 +2,6 @@ package io.benwiegand.projection.geargrinder.proto;
 
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.readInt32;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.readInt64;
-import static io.benwiegand.projection.geargrinder.util.ByteUtil.unsignByte;
 
 import android.util.Base64;
 import android.util.Log;
@@ -116,22 +115,34 @@ public class ProtoParser {
         return getSingleString(buffer, fieldList, null);
     }
 
-    private static int[] getUnsignedInteger8Array(byte[] buffer, ProtoVarData vd) {
-        if (vd == null) return new int[0];
+    private static long[] getVarIntArray(byte[] buffer, ProtoVarData vd) {
+        if (vd == null) return new long[0];
 
-        int[] result = new int[vd.length()];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = unsignByte(buffer[i + vd.offset()]);
+        ArrayList<Long> values = new ArrayList<>();
+        int cur = vd.offset();
+        for (int i = vd.offset(); i < vd.offset() + vd.length(); i++) {
+            if ((buffer[i] & 0x80) != 0) continue;
+            values.add(new ProtoVarInt(0, cur, i - cur + 1).decode(buffer));
+            cur = i + 1;
         }
+
+        long[] result = new long[values.size()];
+        for (int i = 0; i < result.length; i++)
+            result[i] = values.get(i);
         return result;
     }
 
     public static int[] getUnsignedInteger32Array(byte[] buffer, List<ProtoField> fieldList) {
         if (fieldList == null) return new int[0];
 
-        // seems to be converted to a byte array sometimes when all values are <= 255
-        if (fieldList.size() == 1 && fieldList.get(0) instanceof ProtoVarData vd)
-            return getUnsignedInteger8Array(buffer, vd);
+        // seems to be converted to var int array sometimes
+        if (fieldList.size() == 1 && fieldList.get(0) instanceof ProtoVarData vd) {
+            long[] values = getVarIntArray(buffer, vd);
+            int[] result = new int[values.length];
+            for (int i = 0; i < values.length; i++)
+                result[i] = (int) values[i];
+            return result;
+        }
 
         int[] result = new int[fieldList.size()];
         int i = 0;
@@ -140,6 +151,27 @@ public class ProtoParser {
                 case ProtoVarInt vi -> (int) vi.decode(buffer);
                 case Proto32 p32 -> readInt32(buffer, p32.offset());
                 default -> throw new AssertionError("invalid field type for 32 bit integer");
+            };
+        }
+        return result;
+    }
+
+    public static long[] getUnsignedIntegerArray(byte[] buffer, List<ProtoField> fieldList) {
+        if (fieldList == null) return new long[0];
+
+        // seems to be converted to var int array sometimes
+        if (fieldList.size() == 1 && fieldList.get(0) instanceof ProtoVarData vd) {
+            return getVarIntArray(buffer, vd);
+        }
+
+        long[] result = new long[fieldList.size()];
+        int i = 0;
+        for (ProtoParser.ProtoField field : fieldList) {
+            result[i++] = switch (field) {
+                case ProtoVarInt vi -> vi.decode(buffer);
+                case Proto32 p32 -> readInt32(buffer, p32.offset());
+                case Proto64 p64 -> readInt64(buffer, p64.offset());
+                default -> throw new AssertionError("invalid field type for integer");
             };
         }
         return result;

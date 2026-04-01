@@ -4,6 +4,11 @@ import static io.benwiegand.projection.geargrinder.util.ByteUtil.unsignByte;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeInt32;
 import static io.benwiegand.projection.geargrinder.util.ByteUtil.writeInt64;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.stream.Collectors;
+
 /**
  * flexible protobuf serializer
  */
@@ -126,6 +131,24 @@ public class ProtoSerializer {
             i += field.encode(buffer, i);
         }
         return buffer;
+    }
+
+    public static ProtoVarData createVarIntArray(int fieldId, long... values) {
+        Collection<ProtoVarInt> varInts = Arrays.stream(values)
+                .mapToObj(n -> new ProtoVarInt(0, n))
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        int length = varInts.stream()
+                .map(ProtoVarInt::encodedLength)
+                .reduce(Integer::sum)
+                .orElse(0);
+
+        byte[] buffer = new byte[length];
+        int cur = 0;
+        for (ProtoVarInt vi : varInts)
+            cur += vi.encode(buffer, cur);
+
+        return new ProtoVarData(fieldId, buffer);
     }
 
 }
