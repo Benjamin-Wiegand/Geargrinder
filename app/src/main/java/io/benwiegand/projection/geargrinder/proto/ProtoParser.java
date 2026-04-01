@@ -87,6 +87,11 @@ public class ProtoParser {
     }
 
     public static int getSingleUnsignedInteger32(byte[] buffer, List<ProtoField> fieldList, int defaultValue) {
+        return getSingleInteger32(buffer, fieldList, defaultValue);
+    }
+
+    public static int getSingleInteger32(byte[] buffer, List<ProtoField> fieldList, int defaultValue) {
+        // TODO: this works but idk if it's correct
         return switch (getSingle(fieldList)) {
             case null -> defaultValue;
             case ProtoVarInt vi -> (int) vi.decode(buffer);

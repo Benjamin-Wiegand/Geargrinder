@@ -9,14 +9,16 @@ import java.util.Map;
 
 import io.benwiegand.projection.geargrinder.proto.ProtoParser;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.ButtonEvent;
+import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.RelativeEvent;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 
 public record InputEventData(
         long timestamp,         // nanoseconds
         // TODO: field 2 (multi-display?)
         TouchEvent touchEvent,
-        ButtonEvent[] buttonEvents
-        // TODO: fields 5 and 6 (touch pad?)
+        ButtonEvent[] buttonEvents,
+        // TODO: field 5
+        RelativeEvent[] relativeEvents
 ) {
     private static final String TAG = InputEventData.class.getSimpleName();
 
@@ -35,10 +37,20 @@ public record InputEventData(
                 buttonEvents = new ButtonEvent[0];
             }
 
+            // encoder/rotary input
+            RelativeEvent[] relativeEvents;
+            ProtoParser.ProtoVarData relativeEventField = ProtoParser.getSingle(fields.get(6), ProtoParser.ProtoVarData.class);
+            if (relativeEventField != null) {
+                relativeEvents = RelativeEvent.parseAll(buffer, relativeEventField.offset(), relativeEventField.length());
+            } else {
+                relativeEvents = new RelativeEvent[0];
+            }
+
             return new InputEventData(
                     ProtoParser.getSingleUnsignedInteger(buffer, fields.get(1), 0),
                     touchEvent,
-                    buttonEvents
+                    buttonEvents,
+                    relativeEvents
             );
 
         } catch (Throwable t) {
@@ -53,6 +65,7 @@ public record InputEventData(
                 "timestamp=" + timestamp +
                 ", touchEvent=" + touchEvent +
                 ", buttonEvents=" + Arrays.toString(buttonEvents) +
+                ", relativeEvents=" + Arrays.toString(relativeEvents) +
                 '}';
     }
 }

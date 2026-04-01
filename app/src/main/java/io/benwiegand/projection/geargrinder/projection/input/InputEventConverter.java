@@ -12,8 +12,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import io.benwiegand.projection.geargrinder.callback.InputEventListener;
+import io.benwiegand.projection.geargrinder.proto.data.constants.SpecialKeyCodes;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.ButtonEvent;
+import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.RelativeEvent;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.TouchEvent;
 
 /**
@@ -192,5 +194,22 @@ public class InputEventConverter implements InputEventListener {
         );
 
         listener.onInputEvent(keyEvent, targetDisplayId, false);
+    }
+
+    @Override
+    public void onRelativeEvent(RelativeEvent event) {
+        if (event.code() == SpecialKeyCodes.KEYCODE_ROTARY_INPUT) {
+            if (event.delta() == 0) return; // no input
+
+            // for now just translate to key events
+            int steps = Math.abs(event.delta());
+            int keycode = event.delta() > 0 ? KeyEvent.KEYCODE_NAVIGATE_NEXT : KeyEvent.KEYCODE_NAVIGATE_PREVIOUS;
+            for (int i = 0; i < steps; i++)
+                onButtonEvent(new ButtonEvent(keycode, true));
+            onButtonEvent(new ButtonEvent(keycode, false));
+
+        } else {
+            Log.e(TAG, "unhandled keycode for relative input: " + event.code());
+        }
     }
 }

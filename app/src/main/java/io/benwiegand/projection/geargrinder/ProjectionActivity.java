@@ -10,6 +10,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.view.DragEvent;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -161,6 +162,29 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
         batteryIndicator.destroy();
         networkIndicators.destroy();
         notificationDisplay.destroy();
+    }
+
+    private boolean focusSearch(int direction) {
+        View focus = getCurrentFocus();
+        if (focus == null) focus = findViewById(R.id.app_drawer_button);    // TODO: fails in touch focus mode
+
+        View nextFocus = focus.focusSearch(direction);
+        if (nextFocus == null) {
+            Log.w(TAG, "couldn't find next focus");
+            return false;
+        }
+
+        return nextFocus.requestFocus();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        boolean handled = switch (keyCode) {
+            case KeyEvent.KEYCODE_NAVIGATE_NEXT -> focusSearch(View.FOCUS_FORWARD);
+            case KeyEvent.KEYCODE_NAVIGATE_PREVIOUS -> focusSearch(View.FOCUS_BACKWARD);
+            default -> false;
+        };
+        return handled || super.onKeyDown(keyCode, event);
     }
 
     public void onGlobalLayout() {

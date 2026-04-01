@@ -19,6 +19,7 @@ import io.benwiegand.projection.geargrinder.proto.data.readable.ChannelOpenRespo
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputChannelMeta;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.InputEventData;
 import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.ButtonEvent;
+import io.benwiegand.projection.geargrinder.proto.data.readable.input.event.RelativeEvent;
 import io.benwiegand.projection.geargrinder.proto.data.writable.ChannelOpenRequest;
 import io.benwiegand.projection.geargrinder.proto.data.writable.input.InputBindingRequest;
 
@@ -65,6 +66,11 @@ public class InputChannel implements MessageListener {
         for (ButtonEvent buttonEvent : eventData.buttonEvents()) {
             Log.i(TAG, "button event: " + buttonEvent);
             inputEventListener.onButtonEvent(buttonEvent);
+        }
+
+        for (RelativeEvent relativeEvent : eventData.relativeEvents()) {
+            Log.i(TAG, "relative event: " + relativeEvent);
+            inputEventListener.onRelativeEvent(relativeEvent);
         }
 
         if (eventData.touchEvent() != null) {
