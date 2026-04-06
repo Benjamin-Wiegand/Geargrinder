@@ -18,14 +18,39 @@ This is experimental software:
 
 Still in development.
 
+### authentication
+
+Some (most?) certified/OEM Android Auto headunits verify an SSL certificate provided by the phone to check if it originated from the Android Auto app, and may refuse to connect if this verification fails.
+
+There are some exceptions, but I don't have a large enough sample to verify if they are the exception or the rule yet.
+
+To use Geargrinder with these headunits, you need to obtain the private key and SSL certificate used by the official Android Auto app. Instructions for this are not yet available in this repository, this process is not trivial, **and there is no secret menu in the Android Auto app which exposes these (to my knowledge)**, but there are multiple ways to go about it if you know what you're doing, and other ways if not (see tip below). 
+
+> [!tip]
+> You may also be able to find working (but usually expired) Android Auto app key/certificate pairs from elsewhere on the Internet. These will work, but usually only if you to set the clock back on your headunit to before they expired.
+
+Once you obtain matching private key and certificate files, you can import them into Geargrinder via the settings menu (Settings > Certificates and keys). If successful, you should now be allowed to enable the "Use imported keys" option. Once enabled, the imported key and certificate will be used the next time you try connecting to your headunit.
+
 ### headunit compatibility
 
 > [!warning]
 > I have no idea how your car will react to communications from this app. Be prepared for unforeseen consequences.
+> 
+> If you accept the risks and want to help, please open an issue with the results (regardless of success).
 
-Only working emulators and potentially some knockoff/uncertified headunits so far. Certified OEM headunits won't work until authentication is properly implemented and will likely require cryptographic keys to be provided.
+> [!note]
+> Some headunits **may** work with Geargrinder's self-signed keys. If not, then you may need to use keys and certificates extracted from the Android Auto app.
+> Please see the [authentication](#authentication) section for more information.
 
-If you accept the risks and want to help by testing on your hardware, I would appreciate if you open an issue with the results (regardless of success).
+Tested and working on OEM car headunits from these cars:
+- 2021-2024 Nissan Kicks SV/SR
+    - Model number: PN-4300
+    - Software Version: 432
+    - Authentication: Works with both self-signed (CN=Bob) and imported keys. Date is adjustable.
+    - Notes: Only tested outside of a car, I don't have the car, just the stereo.
+
+
+### emulator compatibility
 
 Tested and working on these emulators:
 - [OpenAuto](https://github.com/f1xpl/openauto/)
@@ -91,7 +116,7 @@ Currently, your phone must natively support the audio sample rate for your headu
 - USB communication
 - Protocol communication
     - Framing and multi-frame messages
-    - TLS encryption (auth is TODO)
+    - TLS encryption
     - Service discovery (mostly)
 - Video
     - H.264 at 480p, 720p, and 1080p, 30 and 60 fps (requires your phone to support the given mode)
@@ -101,10 +126,13 @@ Currently, your phone must natively support the audio sample rate for your headu
     - touch screen input (with multitouch)
     - phone keyboard input
     - basic button input
+    - basic rotary input
 - Basic UI
     - open apps on the display
     - split screen
-    - bar with quick-launch app icons and time
+    - dock with app shortcuts, time, battery, and network indicators
+    - app drawer
+    - pop-up notifications with TTS
 
 
 ## thanks
