@@ -19,17 +19,8 @@
         android:gravity="center_vertical"
         android:background="?attr/colorAppModal"
         android:clickable="true"
+        android:focusable="false"
         >
-
-        <ImageButton
-            android:id="@+id/virtual_activity_close_button"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="end"
-            android:contentDescription="@string/close_button"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:background="@android:color/transparent"
-            />
 
         <LinearLayout
             android:layout_width="wrap_content"

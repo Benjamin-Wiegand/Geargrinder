@@ -62,6 +62,11 @@ public class ProjectionModal {
         return this;
     }
 
+    public ProjectionModal setNeutralButton(@StringRes int text, View.OnClickListener onClick) {
+        inflateButton(rootView.findViewById(R.id.neutral_button), text, onClick);
+        return this;
+    }
+
     public ProjectionModal setNegativeButton(@StringRes int text, View.OnClickListener onClick) {
         inflateButton(rootView.findViewById(R.id.negative_button), text, onClick);
         return this;

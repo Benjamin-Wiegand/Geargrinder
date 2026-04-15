@@ -48,8 +48,8 @@
 
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/split_screen_layout"
+            <FrameLayout
+                android:id="@+id/content_frame"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
@@ -80,14 +80,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                />
-
-            <ImageButton
-                android:id="@+id/edit_layout_button"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@android:drawable/ic_menu_crop"
-                android:background="?attr/selectableItemBackgroundBorderless"
                 />
 
             <LinearLayout

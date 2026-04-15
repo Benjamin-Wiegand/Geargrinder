@@ -11,6 +11,9 @@
         <attr name="colorDockBackground" format="color" />
 
         <attr name="colorAppModal" format="color" />
+
+        <attr name="colorDockItemInactive" format="color" />
+        <attr name="colorDockItemActive" format="color" />
     </declare-styleable>
     
 </resources>

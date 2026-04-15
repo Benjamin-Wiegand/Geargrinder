@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
+import android.os.RemoteException;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -16,8 +17,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-
-import java.io.IOException;
 
 import io.benwiegand.projection.geargrinder.R;
 import io.benwiegand.projection.geargrinder.pm.AppRecord;
@@ -52,56 +51,30 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private static final int LOCAL_VIRTUAL_DISPLAY_FLAGS = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
             | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
 
-    private static final long SPLASH_SHOW_DURATION = 3000;
+    private static final long SPLASH_SHOW_DURATION = 250;
     private static final long SPLASH_ANIMATION_DURATION = 300;
 
     private final IPrivd privd;
     private final AppRecord app;
-    private final VirtualActivityListener listener;
-    private final VirtualDisplayController virtualDisplay;
+    private VirtualDisplayController virtualDisplay = null;
     private final int density;
     private int width;
     private int height;
+    private boolean localDisplayFallback = false;
 
     private final View rootView;
     private final SurfaceView surfaceView;
 
-    public interface VirtualActivityListener {
-        void onVirtualActivityCloseButton(VirtualActivity virtualActivity);
-    }
-
     @SuppressLint("ClickableViewAccessibility")
-    public VirtualActivity(IPrivd privd, AppRecord app, ViewGroup parent, VirtualActivityListener listener) throws IOException, PackageManager.NameNotFoundException {
+    public VirtualActivity(IPrivd privd, AppRecord app, ViewGroup parent) {
         this.privd = privd;
         this.app = app;
-        this.listener = listener;
+        width = 800;
+        height = 600;
         density = parent.getResources().getDisplayMetrics().densityDpi;
         Context context = parent.getContext();
         PackageManager pm = context.getPackageManager();
         LayoutInflater inflater = LayoutInflater.from(context);
-
-        // display
-        VirtualDisplayController virtualDisplay;
-        try {
-            virtualDisplay = PrivdVirtualDisplayProxy.tryCreateWithFallbackFlags(
-                    privd, VIRTUAL_DISPLAY_NAME,
-                    800, 480, density,  // TODO
-                    null, PRIVD_VIRTUAL_DISPLAY_FLAGS
-            );
-        } catch (Throwable t) {
-            Log.e(TAG, "failed to create virtual display via privd", t);
-
-            // this causes context issues and is not ideal
-            Log.w(TAG, "falling back to local virtual display");
-            DisplayManager dm = context.getSystemService(DisplayManager.class);
-            virtualDisplay = new LocalVirtualDisplayController(
-                    dm, VIRTUAL_DISPLAY_NAME,
-                    800, 480, density,  // TODO
-                    null, LOCAL_VIRTUAL_DISPLAY_FLAGS
-            );
-        }
-
-        this.virtualDisplay = virtualDisplay;
 
         // view
         rootView = inflater.inflate(R.layout.layout_virtual_activity, parent, false);
@@ -114,22 +87,64 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         ImageView iconView = rootView.findViewById(R.id.virtual_activity_icon);
         iconView.setImageDrawable(app.icon(pm));
 
-        rootView.findViewById(R.id.virtual_activity_close_button)
-                .setOnClickListener(v -> listener.onVirtualActivityCloseButton(this));
-
         // touch
         surfaceView.getViewTreeObserver().addOnGlobalLayoutListener(() ->
                 onLayoutUpdated(surfaceView.getWidth(), surfaceView.getHeight()));
         surfaceView.setOnTouchListener(this::onMotionEvent);
         surfaceView.setOnGenericMotionListener(this::onMotionEvent);
 
-        // launch
         try {
+            launch();
+        } catch (Throwable ignored) { }
+    }
+
+    public Context getContext() {
+        return rootView.getContext();
+    }
+
+    public void launch() throws RemoteException {
+        try {
+            // display
+            if (virtualDisplay != null && localDisplayFallback) {
+                Log.i(TAG, "releasing local virtual display for re-launch");
+                virtualDisplay.release();
+                virtualDisplay = null;
+            }
+
+            if (virtualDisplay == null) {
+                VirtualDisplayController virtualDisplay;
+                try {
+                    virtualDisplay = PrivdVirtualDisplayProxy.tryCreateWithFallbackFlags(
+                            privd, VIRTUAL_DISPLAY_NAME,
+                            width, height, density,
+                            null, PRIVD_VIRTUAL_DISPLAY_FLAGS
+                    );
+
+                    localDisplayFallback = false;
+                } catch (Throwable t) {
+                    Log.e(TAG, "failed to create virtual display via privd", t);
+
+                    // this causes context issues and is not ideal
+                    Log.w(TAG, "falling back to local virtual display");
+                    DisplayManager dm = getContext().getSystemService(DisplayManager.class);
+                    virtualDisplay = new LocalVirtualDisplayController(
+                            dm, VIRTUAL_DISPLAY_NAME,
+                            width, height, density,
+                            null, LOCAL_VIRTUAL_DISPLAY_FLAGS
+                    );
+
+                    localDisplayFallback = true;
+                }
+
+                this.virtualDisplay = virtualDisplay;
+            }
+
+            // launch
             int result = privd.launchActivity(app.launchComponent(), getDisplayId());
             Log.d(TAG, "launch result " + result + " for " + app.launchComponent().flattenToShortString());
         } catch (Throwable t) {
-            destroy();
-            throw new RuntimeException("failed to launch activity for virtual activity", t);
+            Log.e(TAG, "failed to launch virtual activity", t);
+            // TODO: splash with retry button
         }
     }
 
@@ -168,21 +183,30 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     public int getDisplayId() {
+        if (virtualDisplay == null) return -1;
         return virtualDisplay.getDisplayId();
     }
 
     private void onLayoutUpdated(int width, int height) {
+        if (width <= 0 || height <= 0) {
+            Log.w(TAG, "ignoring layout update due to unsupported size: " + width + "x" + height);
+            return;
+        }
+
         if (this.width != width || this.height != height) {
             this.width = width;
             this.height = height;
-            virtualDisplay.resize(width, height, density);
-            showSplash(false);
+
+            if (virtualDisplay != null) {
+                virtualDisplay.resize(width, height, density);
+                showSplash(false);
+            }
         }
     }
 
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-        if (virtualDisplay.getSurface() != holder.getSurface())
+        if (virtualDisplay != null && virtualDisplay.getSurface() != holder.getSurface())
             virtualDisplay.setSurface(holder.getSurface());
 
         onLayoutUpdated(width, height);
@@ -197,7 +221,8 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surface destroyed");
-        virtualDisplay.setSurface(null);
+        if (virtualDisplay != null)
+            virtualDisplay.setSurface(null);
     }
 
     private boolean onMotionEvent(View view, MotionEvent event) {

@@ -49,6 +49,16 @@
             android:layout_marginVertical="24dp"
             android:orientation="horizontal">
 
+            <Button
+                android:id="@+id/neutral_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:visibility="gone"
+                tools:text="@string/not_now_button"
+                tools:visibility="visible" />
+
             <Space
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

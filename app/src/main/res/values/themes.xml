@@ -2,6 +2,9 @@
     <style name="Base.Theme.Geargrinder" parent="Theme.Material3.DayNight">
         <item name="colorDockBackground">@color/black</item>
         <item name="colorDockForeground">@color/white</item>
+        <item name="colorDockItemInactive">#666666</item>
+        <item name="colorDockItemActive">?attr/colorPrimary</item>
+
         <item name="colorAppModal">?attr/colorSurfaceContainer</item>
 
         <item name="dynamicColorThemeOverlay">@style/ThemeOverlay.Geargrinder.DynamicColors</item>
@@ -13,8 +16,11 @@
     <style name="Base.ThemeOverlay.Geargrinder.DynamicColors" parent="@style/ThemeOverlay.Material3.DynamicColors.DayNight">
         <item name="colorDockForeground">@color/material_dynamic_neutral_variant99</item>
         <item name="colorDockBackground">@color/material_dynamic_neutral_variant10</item>
+        <item name="colorDockItemInactive">@color/material_dynamic_neutral40</item>
+        <item name="colorDockItemActive">@color/material_dynamic_primary70</item>
 
         <item name="colorAppModal">@color/material_dynamic_neutral_variant70</item>
+
     </style>
 
     <style name="ThemeOverlay.Geargrinder.ActionBar" parent="Widget.Material3.ActionBar.Solid">
