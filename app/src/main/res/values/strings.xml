@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Geargrinder</string>
+    <string name="app_name">Flywheel</string>
 
     <string name="connection_foreground_notification_channel_name">Active Connection</string>
     <string name="connection_error_notification_channel_name">Connection Error</string>
@@ -9,16 +9,16 @@
     <string name="connected_to_car">connected to your car</string>
 
     <string name="car_connection_error">car connection error</string>
-    <string name="error_grant_usb_permission">Geargrinder needs permission to connect to your car</string>
+    <string name="error_grant_usb_permission">Flywheel needs permission to connect to your car</string>
     <string name="error_no_usb_headunit">couldn\'t find your car over USB</string>
 
     <string name="car_connection_unexpected_error">unexpected car connection error</string>
     <string name="error_car_io_usb_generic">lost connection with your car. check the cable or try again.</string>
-    <string name="post_notifications_permission_rationale">Notifications are used to communicate errors and connection status. Geargrinder may not work properly without this permission.</string>
+    <string name="post_notifications_permission_rationale">Notifications are used to communicate errors and connection status. Flywheel may not work properly without this permission.</string>
     <string name="not_now_button">not now</string>
     <string name="grant_permission_button">grant</string>
     <string name="post_notifications_permission_request">Notifications permission</string>
-    <string name="accessibility_service_description">Allows Geargrinder to forward inputs from your car to your device.</string>
+    <string name="accessibility_service_description">Allows Flywheel to forward inputs from your car to your device.</string>
     <string name="close_button">close</string>
     <string name="cancel_button">cancel</string>
     <string name="launch_app">Launch app</string>
@@ -36,7 +36,7 @@
     <string name="settings_button">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="debug_title">Debug</string>
-    <string name="connect_your_car_over_usb">Connect your car over USB to start Geargrinder.</string>
+    <string name="connect_your_car_over_usb">Connect your car over USB to start Flywheel.</string>
     <string name="privilege_mode_pref_name">Privilege mode</string>
     <string name="operational_mode_pref_name">Operational mode</string>
     <string name="shizuku_permission_request">Shizuku permission</string>
@@ -65,12 +65,12 @@
     <string name="stop_button">stop</string>
     <string name="pref_category_connection">connection</string>
     <string name="unlock_device_before_connecting">For security, unlock your phone before connecting to your car</string>
-    <string name="unlock_your_phone">Unlock your phone to use Geargrinder</string>
+    <string name="unlock_your_phone">Unlock your phone to use Flywheel</string>
     <string name="start_projection_when_locked_pref_name">Allow starting connection while locked</string>
     <string name="projection_resume_grace_period_pref_name">Connection resume grace period</string>
     <string name="start_projection_when_locked_pref_summary_on">You can unlock your phone after connecting to your car</string>
     <string name="start_projection_when_locked_pref_summary_off">You must unlock your phone before connecting to your car</string>
-    <string name="notification_service_description">Allows Geargrinder to display and announce notifications through your car.</string>
+    <string name="notification_service_description">Allows Flywheel to display and announce notifications through your car.</string>
     <string name="notification_tts_announcement_format" formatted="true">%s: %s</string>
     <string name="notification_tts_announcement_no_content" formatted="true">no speakable content</string>
     <string name="speak_button">speak</string>
