@@ -17,17 +17,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center_vertical"
-        android:background="?attr/colorAppModal"
         android:clickable="true"
         android:focusable="false"
+        android:background="?android:attr/windowBackground"
         >
 
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="6dp"
             android:gravity="center"
             android:orientation="vertical"
+            android:background="@drawable/virtual_activity_splash"
             >
 
             <ImageView
