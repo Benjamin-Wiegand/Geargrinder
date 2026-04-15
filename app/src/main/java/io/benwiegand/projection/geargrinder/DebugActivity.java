@@ -3,10 +3,13 @@ package io.benwiegand.projection.geargrinder;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,6 +21,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
+import java.util.function.Supplier;
 
 import io.benwiegand.projection.geargrinder.logs.LogUiAdapter;
 import io.benwiegand.projection.geargrinder.logs.LogcatReader;
@@ -37,18 +42,6 @@ public class DebugActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
-        findViewById(R.id.force_start_service_button).setOnClickListener(v ->
-                startService(new Intent(this, ConnectionService.class)
-                        .setAction(ConnectionService.INTENT_ACTION_CONNECT_USB)));
-
-        findViewById(R.id.launch_privd_button).setOnClickListener(v -> {
-            startService(new Intent(this, PrivdService.class));
-        });
-
-        findViewById(R.id.start_audio_capture_button).setOnClickListener(v ->
-                startActivity(new Intent(this, ConnectionRequestActivity.class)
-                        .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION)));
 
         findViewById(R.id.log_marker_button).setOnClickListener(v -> logcatReader.addMarker());
 
@@ -120,5 +113,38 @@ public class DebugActivity extends AppCompatActivity {
     public boolean onSupportNavigateUp() {
         finish();
         return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_debug, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        Map<Integer, Supplier<Boolean>> actionMap = Map.of(
+                R.id.force_start_service_button, () -> {
+                    startService(new Intent(this, ConnectionService.class)
+                            .setAction(ConnectionService.INTENT_ACTION_CONNECT_USB));
+                    return true;
+                },
+                R.id.debug_launch_projection_button, () -> {
+                    startActivity(new Intent(this, ProjectionActivity.class));
+                    return true;
+                },
+                R.id.launch_privd_button, () -> {
+                    startService(new Intent(this, PrivdService.class));
+                    return true;
+                },
+                R.id.start_audio_capture_button, () -> {
+                    startActivity(new Intent(this, ConnectionRequestActivity.class)
+                            .setAction(ConnectionRequestActivity.INTENT_ACTION_REQUEST_MEDIA_PROJECTION));
+                    return true;
+                }
+        );
+        Supplier<Boolean> action = actionMap.getOrDefault(item.getItemId(), () -> super.onOptionsItemSelected(item));
+        assert action != null;
+        return action.get();
     }
 }

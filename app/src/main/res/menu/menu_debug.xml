@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/force_start_service_button"
+        android:title="force start connection service"
+        tools:ignore="HardcodedText"
+        app:showAsAction="never"
+        />
+
+    <item
+        android:id="@+id/debug_launch_projection_button"
+        android:title="launch ProjectionActivity"
+        tools:ignore="HardcodedText"
+        app:showAsAction="never"
+        />
+
+    <item
+        android:id="@+id/launch_privd_button"
+        android:title="force start privd service"
+        tools:ignore="HardcodedText"
+        app:showAsAction="never"
+        />
+
+    <item
+        android:id="@+id/start_audio_capture_button"
+        android:title="request media projection"
+        tools:ignore="HardcodedText"
+        app:showAsAction="never"
+        />
+
+</menu>
