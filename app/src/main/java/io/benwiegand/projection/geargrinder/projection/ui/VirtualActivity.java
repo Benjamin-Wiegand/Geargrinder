@@ -4,9 +4,9 @@ import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
 import android.hardware.display.DisplayManager;
+import android.os.DeadObjectException;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.RemoteException;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -19,6 +19,8 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 
 import io.benwiegand.projection.geargrinder.R;
+import io.benwiegand.projection.geargrinder.exception.ProjectedAppLaunchException;
+import io.benwiegand.projection.geargrinder.exception.UserFriendlyException;
 import io.benwiegand.projection.geargrinder.pm.AppRecord;
 import io.benwiegand.projection.geargrinder.projection.display.LocalVirtualDisplayController;
 import io.benwiegand.projection.geargrinder.projection.display.PrivdVirtualDisplayProxy;
@@ -104,7 +106,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         return rootView.getContext();
     }
 
-    public void launch() throws RemoteException {
+    public void launch() throws ProjectedAppLaunchException {
         if (launched) Log.i(TAG, "re-launching");
         else Log.i(TAG, "trying launch");
 
@@ -127,19 +129,26 @@ public class VirtualActivity implements SurfaceHolder.Callback {
                     );
 
                     localDisplayFallback = false;
+                } catch (DeadObjectException e) {
+                    throw new ProjectedAppLaunchException(getContext(), R.string.projected_app_launch_error_privd_dead, e);
                 } catch (Throwable t) {
                     Log.e(TAG, "failed to create virtual display via privd", t);
 
-                    // this causes context issues and is not ideal
-                    Log.w(TAG, "falling back to local virtual display");
-                    DisplayManager dm = getContext().getSystemService(DisplayManager.class);
-                    virtualDisplay = new LocalVirtualDisplayController(
-                            dm, VIRTUAL_DISPLAY_NAME,
-                            width, height, density,
-                            null, LOCAL_VIRTUAL_DISPLAY_FLAGS
-                    );
+                    try {
+                        // this causes context issues and is not ideal
+                        Log.w(TAG, "falling back to local virtual display");
+                        DisplayManager dm = getContext().getSystemService(DisplayManager.class);
+                        virtualDisplay = new LocalVirtualDisplayController(
+                                dm, VIRTUAL_DISPLAY_NAME,
+                                width, height, density,
+                                null, LOCAL_VIRTUAL_DISPLAY_FLAGS
+                        );
 
-                    localDisplayFallback = true;
+                        localDisplayFallback = true;
+
+                    } catch (Throwable tt) {
+                        throw new ProjectedAppLaunchException(getContext(), R.string.projected_app_launch_error_virtual_display, tt);
+                    }
                 }
 
                 this.virtualDisplay = virtualDisplay;
@@ -148,13 +157,22 @@ public class VirtualActivity implements SurfaceHolder.Callback {
             invalidateFrame();
 
             // launch
-            int result = privd.launchActivity(app.launchComponent(), getDisplayId());
-            Log.d(TAG, "launch result " + result + " for " + app.launchComponent().flattenToShortString());
+            try {
+                int result = privd.launchActivity(app.launchComponent(), getDisplayId());
+                Log.d(TAG, "launch result " + result + " for " + app.launchComponent().flattenToShortString());
+            } catch (DeadObjectException e) {
+                throw new ProjectedAppLaunchException(getContext(), R.string.projected_app_launch_error_privd_dead, e);
+            } catch (Throwable t) {
+                throw new ProjectedAppLaunchException(getContext(), R.string.projected_app_launch_error_launch_unknown, t);
+            }
 
+        } catch (UserFriendlyException e) {
+            Log.e(TAG, "failed to launch virtual activity", e);
+            // TODO: splash with retry button
+            throw e;
         } catch (Throwable t) {
             Log.e(TAG, "failed to launch virtual activity", t);
-            // TODO: splash with retry button
-            throw t;
+            throw new ProjectedAppLaunchException(getContext(), R.string.projected_app_launch_error_unknown, t);
         }
     }
 

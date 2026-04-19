@@ -123,5 +123,10 @@
     <string name="launch_split_screen">split-screen</string>
     <string name="relaunch_button">re-launch</string>
     <string name="add_split_screen_title">Add to split-screen</string>
+    <string name="projected_app_launch_error_title">Failed to launch app</string>
+    <string name="projected_app_launch_error_virtual_display">Failed to create virtual display.</string>
+    <string name="projected_app_launch_error_launch_unknown">Unexpected error while starting activity.</string>
+    <string name="projected_app_launch_error_privd_dead">Failed to contact privileged daemon.</string>
+    <string name="projected_app_launch_error_unknown">Unexpected error while launching app.</string>
 
 </resources>

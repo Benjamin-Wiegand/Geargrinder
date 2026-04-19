@@ -1,5 +1,7 @@
 package io.benwiegand.projection.geargrinder.projection.ui.task;
 
+import static io.benwiegand.projection.geargrinder.util.UiUtil.errorDialog;
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.view.ViewGroup;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.benwiegand.projection.geargrinder.R;
+import io.benwiegand.projection.geargrinder.exception.UserFriendlyException;
 import io.benwiegand.projection.geargrinder.pm.AppRecord;
 import io.benwiegand.projection.geargrinder.projection.ui.VirtualActivity;
 import io.benwiegand.projection.geargrinder.projection.ui.preset.ButtonPreset;
@@ -44,14 +47,7 @@ public class ProjectionTask {
                     removeActivity(activity);
                     splash.hide();
                 }),
-                new ButtonPreset(R.string.relaunch_button, android.R.drawable.ic_popup_sync, v -> {
-                    try {
-                        activity.launch();
-                        splash.hide();
-                    } catch (Throwable t) {
-                        // TODO
-                    }
-                }),
+                new ButtonPreset(R.string.relaunch_button, android.R.drawable.ic_popup_sync, v -> relaunchActivity(activity)),
         });
 
         for (VirtualActivity activity : initialActivities) {
@@ -179,6 +175,18 @@ public class ProjectionTask {
         splash.removeVirtualActivity(activity);
         onUpdated();
         taskManager.destroyVirtualActivityIfUnused(activity);
+    }
+
+    private void relaunchActivity(VirtualActivity activity) {
+        try {
+            activity.launch();
+            splash.hide();
+        } catch (UserFriendlyException e) {
+            errorDialog(getContext(), e)
+                    .setNeutralButton(R.string.cancel_button, null)
+                    .setPositiveButton(R.string.relaunch_button, (d, i) -> relaunchActivity(activity))
+                    .show();
+        }
     }
 
 }
