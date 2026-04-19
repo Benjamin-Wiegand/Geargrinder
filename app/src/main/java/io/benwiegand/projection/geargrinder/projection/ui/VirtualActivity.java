@@ -3,7 +3,6 @@ package io.benwiegand.projection.geargrinder.projection.ui;
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,8 +15,6 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
@@ -54,8 +51,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private static final int LOCAL_VIRTUAL_DISPLAY_FLAGS = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
             | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
 
-    private static final long SPLASH_MAX_SHOW_DURATION = 250;
-    private static final long SPLASH_ANIMATION_DURATION = 300;
+    private static final long LOADING_SPLASH_MAX_SHOW_DURATION = 500;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -68,12 +64,12 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     private boolean localDisplayFallback = false;
 
     private long splashShownAt = 0;
-    private boolean splashVisible = false;
     private boolean validFrame = false;
     private boolean launched = false;
 
     private final View rootView;
     private final SurfaceView surfaceView;
+    private final VirtualActivitySplash splash;
 
     @SuppressLint("ClickableViewAccessibility")
     public VirtualActivity(IPrivd privd, AppRecord app, ViewGroup parent) {
@@ -83,7 +79,6 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         height = 600;
         density = parent.getResources().getDisplayMetrics().densityDpi;
         Context context = parent.getContext();
-        PackageManager pm = context.getPackageManager();
         LayoutInflater inflater = LayoutInflater.from(context);
 
         // view
@@ -91,11 +86,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         surfaceView = rootView.findViewById(R.id.virtual_activity_surface);
         surfaceView.getHolder().addCallback(this);
 
-        TextView titleView = rootView.findViewById(R.id.virtual_activity_title);
-        titleView.setText(app.label(pm));
-
-        ImageView iconView = rootView.findViewById(R.id.virtual_activity_icon);
-        iconView.setImageDrawable(app.icon(pm));
+        splash = new VirtualActivitySplash(rootView.findViewById(R.id.virtual_activity_splash), this);
 
         // touch
         surfaceView.getViewTreeObserver().addOnGlobalLayoutListener(() ->
@@ -193,31 +184,22 @@ public class VirtualActivity implements SurfaceHolder.Callback {
     }
 
     private void updateSplashVisibility() {
-        if (!splashVisible) return;
+        if (!splash.isVisible()) return;
 
-        boolean timeout = splashShownAt + SPLASH_MAX_SHOW_DURATION <= SystemClock.elapsedRealtime();
+        boolean timeout = splashShownAt + LOADING_SPLASH_MAX_SHOW_DURATION <= SystemClock.elapsedRealtime();
         if (!validFrame && !timeout) return;
 
         Log.d(TAG, "hiding splash: validFrame=" + validFrame + ", timeout=" + timeout);
-        View splash = rootView.findViewById(R.id.virtual_activity_splash);
-        splash.animate()
-                .setStartDelay(0)
-                .setDuration(SPLASH_ANIMATION_DURATION)
-                .alpha(0f)
-                .withEndAction(() -> splash.setVisibility(View.GONE));
-        splashVisible = false;
+        splash.hide();
     }
 
     private void showSplash() {
         splashShownAt = SystemClock.elapsedRealtime();
-        handler.postDelayed(this::updateSplashVisibility, SPLASH_MAX_SHOW_DURATION);
-        if (splashVisible) return;
+        handler.postDelayed(this::updateSplashVisibility, LOADING_SPLASH_MAX_SHOW_DURATION);
+        if (splash.isVisible()) return;
 
         Log.d(TAG, "showing splash: validFrame=" + validFrame + ", launched=" + launched);
-        View splash = rootView.findViewById(R.id.virtual_activity_splash);
-        splash.setVisibility(View.VISIBLE);
-        splash.setAlpha(1f);
-        splashVisible = true;
+        splash.show(false);
     }
 
     private void invalidateFrame() {

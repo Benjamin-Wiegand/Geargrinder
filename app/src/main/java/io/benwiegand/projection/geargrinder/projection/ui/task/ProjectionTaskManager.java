@@ -9,12 +9,16 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.benwiegand.projection.geargrinder.R;
 import io.benwiegand.projection.geargrinder.pm.AppRecord;
@@ -32,6 +36,7 @@ public class ProjectionTaskManager {
         default void onTaskRemoved(int index, ProjectionTask task, boolean pinned) {};
         default void onTaskUpdated(ProjectionTask task, boolean pinned) {};
         default void onSwitchTask(ProjectionTask oldTask, boolean oldPinned, ProjectionTask newTask, boolean newPinned) {};
+        default void onContentFocus() {};
     }
 
     private final ViewGroup contentFrame;
@@ -41,6 +46,7 @@ public class ProjectionTaskManager {
     private final Map<ComponentName, VirtualActivity> virtualActivities = new HashMap<>();
     private final List<ProjectionTask> pinnedTasks = new ArrayList<>();
     private final List<ProjectionTask> openTasks = new LinkedList<>();
+    private final List<List<ProjectionTask>> taskLists = List.of(pinnedTasks, openTasks);
     private ProjectionTask activeTask = null;
 
     private int splitScreenOrientation = LinearLayout.HORIZONTAL;
@@ -69,7 +75,12 @@ public class ProjectionTaskManager {
         splitScreenOrientation = contentFrame.getWidth() < contentFrame.getHeight() ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL;
     }
 
-    private void onTaskUpdated(ProjectionTask task) {
+    void onTaskUpdated(ProjectionTask task) {
+        if (task.activityCount() == 0) {
+            Log.i(TAG, "removing now empty task");
+            removeTask(task);
+            return;
+        }
         boolean pinned = isPinned(task);
         callListeners(l -> l.onTaskUpdated(task, pinned));
     }
@@ -103,6 +114,19 @@ public class ProjectionTaskManager {
 
     public boolean isPinned(ProjectionTask task) {
         return pinnedTasks.contains(task);
+    }
+
+    public void removeTask(ProjectionTask task) {
+        boolean pinned = isPinned(task);
+        List<ProjectionTask> taskList = pinned ? pinnedTasks : openTasks;
+        int oldIndex = taskList.indexOf(task);
+        if (oldIndex < 0)
+            throw new AssertionError("can't find provided task");
+
+        if (activeTask == task) switchToTask(null);
+        taskList.remove(task);
+
+        callListeners(l -> l.onTaskRemoved(oldIndex, task, pinned));
     }
 
     public void movePinnedTask(int index, ProjectionTask task) {
@@ -154,7 +178,7 @@ public class ProjectionTaskManager {
         callListeners(l -> l.onTaskMoved(oldIndex, 0, task, false));
     }
 
-    public VirtualActivity getOrCreateVirtualActivity(AppRecord app) {
+    VirtualActivity getOrCreateVirtualActivity(AppRecord app) {
         VirtualActivity oldActivity = virtualActivities.get(app.launchComponent());
         if (oldActivity != null) return oldActivity;
 
@@ -172,6 +196,12 @@ public class ProjectionTaskManager {
         }
     }
 
+    void destroyVirtualActivityIfUnused(VirtualActivity activity) {
+        if (getAllTasksAsStream().anyMatch(task -> task.contains(activity))) return;
+        activity.destroy();
+        virtualActivities.remove(activity.getComponentName());
+    }
+
     private ProjectionTask createTask(AppRecord... apps) {
         ViewGroup taskView = (ViewGroup) LayoutInflater.from(context).inflate(R.layout.layout_projection_task, contentFrame, false);
         LinearLayout splitScreenLayout = taskView.findViewById(R.id.split_screen_layout);
@@ -181,7 +211,7 @@ public class ProjectionTaskManager {
         for (int i = 0; i < apps.length; i++)
             activities[i] = getOrCreateVirtualActivity(apps[i]);
 
-        return new ProjectionTask(taskView, this::onTaskUpdated, activities);
+        return new ProjectionTask(taskView, this, activities);
     }
 
     public ProjectionTask createNewPinnedTask(int index, AppRecord app) {
@@ -198,6 +228,10 @@ public class ProjectionTaskManager {
         return task;
     }
 
+    public void requestContentFocus() {
+        callListeners(Listener::onContentFocus);
+    }
+
     public void switchToTask(ProjectionTask newTask) {
         ProjectionTask oldTask = activeTask;
         boolean oldPinned = oldTask != null && isPinned(oldTask);
@@ -205,9 +239,11 @@ public class ProjectionTaskManager {
 
         if (oldTask != null) oldTask.detach(contentFrame);
         activeTask = newTask;
-        newTask.attach(contentFrame);
+        if (newTask != null) newTask.attach(contentFrame);
         callListeners(l -> l.onSwitchTask(oldTask, oldPinned, newTask, newPinned));
-        if (!newPinned) moveToFront(newTask);
+        if (newTask != null && !newPinned) moveToFront(newTask);
+
+        requestContentFocus();
     }
 
     /**
@@ -267,5 +303,40 @@ public class ProjectionTaskManager {
     public ProjectionTask getActiveTask() {
         return activeTask;
     }
+
+    public Stream<ProjectionTask> getAllTasksAsStream() {
+        return taskLists.stream()
+                .flatMap(Collection::stream);
+    }
+
+    public List<VirtualActivity> getOrderedVirtualActivities() {
+        Set<ComponentName> components = new HashSet<>(virtualActivities.size() * 2);
+        List<VirtualActivity> activities = new ArrayList<>(virtualActivities.size());
+
+        getAllTasksAsStream()
+                .flatMap(task -> task.getVirtualActivities().stream())
+                .filter(va -> components.add(va.getComponentName()))
+                .forEachOrdered(activities::add);
+
+        assert activities.size() == virtualActivities.size();
+        return activities;
+    }
+
+    /**
+     * removes a task containing a single app, if found
+     * @param app the app to check for
+     * @return true if a task was removed, false otherwise
+     */
+    public boolean removeSingle(AppRecord app) {
+        ProjectionTask task = getAllTasksAsStream()
+                .filter(t -> t.activityCount() == 1)
+                .filter(t -> t.contains(app))
+                .findFirst()
+                .orElse(null);
+        if (task == null) return false;
+        removeTask(task);
+        return true;
+    }
+
 
 }

@@ -1,11 +1,8 @@
 package io.benwiegand.projection.geargrinder.util;
 
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
+import android.database.DataSetObserver;
 import android.graphics.Rect;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
@@ -13,20 +10,22 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.ListAdapter;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import io.benwiegand.projection.geargrinder.R;
 import io.benwiegand.projection.geargrinder.exception.UserFriendlyException;
+import io.benwiegand.projection.geargrinder.pm.AppRecord;
 
 public class UiUtil {
 
@@ -58,64 +57,113 @@ public class UiUtil {
         return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics());
     }
 
-    public static AlertDialog createActivityPickerDialog(Context context, @StringRes int title, Consumer<ComponentName> onResult) {
-        PackageManager pm = context.getPackageManager();
-        List<ActivityInfo> activities = new ArrayList<>();
+    public static abstract class SingleTypeListAdapter<T> implements ListAdapter {
 
-        Intent launcherIntent = new Intent(Intent.ACTION_MAIN)
-                .addCategory(Intent.CATEGORY_LAUNCHER);
+        private final List<T> list;
+        private final Function<ViewGroup, View> viewInflater;
+        private final Queue<DataSetObserver> observers = new LinkedList<>();
 
-        for (ResolveInfo info : pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)) {
-            ActivityInfo activity = info.activityInfo;
-            if (!activity.enabled || !activity.exported) continue;
-            activities.add(activity);
+        public SingleTypeListAdapter(List<T> list, Function<ViewGroup, View> viewInflater) {
+            this.list = list;
+            this.viewInflater = viewInflater;
         }
 
-        LayoutInflater inflater = LayoutInflater.from(context);
-        View rootView = inflater.inflate(R.layout.layout_app_picker, null);
-        TextView titleView = rootView.findViewById(R.id.app_picker_title);
-        RecyclerView recycler = rootView.findViewById(R.id.app_picker_recycler);
+        public SingleTypeListAdapter(List<T> list, LayoutInflater inflater, @LayoutRes int layout) {
+            this(list, parent -> inflater.inflate(layout, parent, false));
+        }
 
-        AlertDialog alertDialog = new AlertDialog.Builder(context)
-                .setView(rootView)
+        private void callObservers(Consumer<DataSetObserver> consumer) {
+            for (DataSetObserver observer : observers)
+                consumer.accept(observer);
+        }
+
+        public void notifyListChanged() {
+            callObservers(DataSetObserver::onChanged);
+        }
+
+        public void notifyListInvalidated() {
+            callObservers(DataSetObserver::onInvalidated);
+        }
+
+        protected abstract void inflateItem(int index, T data, View view);
+
+        @Override
+        public boolean areAllItemsEnabled() {
+            return true;
+        }
+
+        @Override
+        public boolean isEnabled(int position) {
+            return true;
+        }
+
+        @Override
+        public int getCount() {
+            return list.size();
+        }
+
+        @Override
+        public T getItem(int position) {
+            return list.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            return 0;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            if (convertView == null) convertView = viewInflater.apply(parent);
+            inflateItem(position, list.get(position), convertView);
+            return convertView;
+        }
+
+        @Override
+        public int getViewTypeCount() {
+            return 1;
+        }
+
+        @Override
+        public boolean hasStableIds() {
+            return true;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return list.isEmpty();
+        }
+
+        @Override
+        public void registerDataSetObserver(DataSetObserver observer) {
+            observers.add(observer);
+        }
+
+        @Override
+        public void unregisterDataSetObserver(DataSetObserver observer) {
+            observers.remove(observer);
+        }
+    }
+
+    public static AlertDialog createAppRecordPickerDialog(Context context, @StringRes int title, List<AppRecord> appRecords, Consumer<AppRecord> onResult) {
+        PackageManager pm = context.getPackageManager();
+        return new AlertDialog.Builder(context)
+                .setTitle(title)
+                .setAdapter(new SingleTypeListAdapter<>(appRecords, LayoutInflater.from(context), R.layout.layout_app_picker_entry) {
+                    @Override
+                    protected void inflateItem(int index, AppRecord app, View view) {
+                        TextView nameView = view.findViewById(R.id.app_name);
+                        ImageView iconView = view.findViewById(R.id.app_icon);
+                        nameView.setText(app.label(pm));
+                        iconView.setImageDrawable(app.icon(pm));
+                    }
+                }, (d, i) -> onResult.accept(appRecords.get(i)))
                 .setNegativeButton(R.string.cancel_button, null)
                 .create();
-
-        titleView.setText(title);
-
-        recycler.setAdapter(new RecyclerView.Adapter<>() {
-            @NonNull
-            @Override
-            public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-                View view = inflater.inflate(R.layout.layout_app_picker_entry, parent, false);
-                return new RecyclerView.ViewHolder(view) {};
-            }
-
-            @Override
-            public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-                ActivityInfo activity = activities.get(position);
-                View view = holder.itemView;
-                ComponentName componentName = new ComponentName(activity.applicationInfo.packageName, activity.name);
-                TextView nameView = view.findViewById(R.id.app_name);
-                ImageView iconView = view.findViewById(R.id.app_icon);
-
-                nameView.setText(pm.getApplicationLabel(activity.applicationInfo));
-                iconView.setImageDrawable(activity.loadIcon(pm));
-
-                view.setOnClickListener(v -> {
-                    alertDialog.dismiss();
-                    onResult.accept(componentName);
-                });
-            }
-
-            @Override
-            public int getItemCount() {
-                return activities.size();
-            }
-        });
-
-        recycler.setLayoutManager(new LinearLayoutManager(context));
-
-        return alertDialog;
     }
 }

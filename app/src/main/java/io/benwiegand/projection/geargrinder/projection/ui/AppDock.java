@@ -96,7 +96,14 @@ public class AppDock implements ProjectionTaskManager.Listener {
         }
 
         View touchTarget = itemView.findViewById(R.id.touch_target);
-        touchTarget.setOnClickListener(v -> taskManager.switchToTask(task));
+        touchTarget.setOnClickListener(v -> {
+            if (task == taskManager.getActiveTask()) {
+                task.toggleSplash();
+                taskManager.requestContentFocus();
+            } else {
+                taskManager.switchToTask(task);
+            }
+        });
         touchTarget.setOnLongClickListener(v -> itemView.startDragAndDrop(null, new View.DragShadowBuilder(itemView), task, 0));
     }
 
@@ -162,10 +169,12 @@ public class AppDock implements ProjectionTaskManager.Listener {
             oldIconsLayout.setBackground(ResourcesCompat.getDrawable(context.getResources(), R.drawable.dock_item_inactive_background, context.getTheme()));
         }
 
-        View newItemView = taskItemViewMap.get(newTask);
-        assert newItemView != null;
-        View newIconsLayout = newItemView.findViewById(R.id.icons_layout);
-        newIconsLayout.setBackground(ResourcesCompat.getDrawable(context.getResources(), R.drawable.dock_item_active_background, context.getTheme()));
+        if (newTask != null) {
+            View newItemView = taskItemViewMap.get(newTask);
+            assert newItemView != null;
+            View newIconsLayout = newItemView.findViewById(R.id.icons_layout);
+            newIconsLayout.setBackground(ResourcesCompat.getDrawable(context.getResources(), R.drawable.dock_item_active_background, context.getTheme()));
+        }
     }
 
     private ItemLocation findDropLocationForCoordinates(int x, int y, boolean pinnedOnly) {

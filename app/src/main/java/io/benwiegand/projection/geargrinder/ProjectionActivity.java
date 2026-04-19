@@ -24,7 +24,6 @@ import io.benwiegand.projection.geargrinder.pm.AppRecord;
 import io.benwiegand.projection.geargrinder.projection.ui.BatteryIndicator;
 import io.benwiegand.projection.geargrinder.projection.ui.NotificationDisplay;
 import io.benwiegand.projection.geargrinder.projection.ui.task.ProjectionTask;
-import io.benwiegand.projection.geargrinder.projection.ui.VirtualActivity;
 import io.benwiegand.projection.geargrinder.projection.ui.NetworkIndicators;
 import io.benwiegand.projection.geargrinder.projection.ui.task.ProjectionTaskManager;
 import io.benwiegand.projection.geargrinder.service.GeargrinderServiceConnector;
@@ -165,31 +164,17 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
     @Override
     public void onAppSelected(AppRecord app) {
-        ProjectionTask task = taskManager.findTaskContaining(app);
-        if (task != null) {
-            taskManager.switchToTask(task);
-            return;
-        }
-
         ProjectionTask activeTask = taskManager.getActiveTask();
-        if (activeTask == null) {
-            taskManager.dynamicOpen(app);
+        if (activeTask != null && activeTask.contains(app)) {
+            taskManager.dynamicOpenSingle(app);
             return;
         }
 
-        new ProjectionModal(findViewById(R.id.root), true)
-                .setTitle(R.string.split_screen_launch_modal_title)
-                .setMessage(R.string.split_screen_launch_modal_message)
-                .setPositiveButton(R.string.launch_single, v -> taskManager.dynamicOpenSingle(app))
-                .setNegativeButton(R.string.launch_split_screen, v -> {
-                    VirtualActivity va = taskManager.getOrCreateVirtualActivity(app);
-                    activeTask.addActivity(va);
-                })
-                .setNeutralButton(R.string.cancel_button, null);
+        taskManager.dynamicOpen(app);
     }
 
     @Override
-    public void onSwitchTask(ProjectionTask oldTask, boolean oldPinned, ProjectionTask newTask, boolean newPinned) {
+    public void onContentFocus() {
         appDrawer.close();
     }
 

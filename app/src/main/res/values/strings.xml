@@ -120,9 +120,8 @@
     <string name="certificate_is_within_valid_period">within validity period</string>
     <string name="certificate_is_not_within_valid_period_format" formatted="true">not valid until %s</string>
     <string name="certificate_is_not_within_valid_period_detail">is your phone time set correctly?</string>
-    <string name="launch_split_screen">split screen</string>
-    <string name="launch_single">launch as new</string>
-    <string name="split_screen_launch_modal_message">Do you want to open the app in split-screen?</string>
-    <string name="split_screen_launch_modal_title">Split-screen</string>
+    <string name="launch_split_screen">split-screen</string>
+    <string name="relaunch_button">re-launch</string>
+    <string name="add_split_screen_title">Add to split-screen</string>
 
 </resources>
