@@ -34,7 +34,8 @@ public abstract class BaseSplash {
                 .setStartDelay(0)
                 .setDuration(animate ? SPLASH_ANIMATION_DURATION : 0)
                 .alpha(1f)
-                .withStartAction(() -> rootView.setVisibility(View.VISIBLE));
+                .withStartAction(() -> rootView.setVisibility(View.VISIBLE))
+                .start();
         visible = true;
     }
 
@@ -48,7 +49,8 @@ public abstract class BaseSplash {
                 .setStartDelay(0)
                 .setDuration(animate ? SPLASH_ANIMATION_DURATION : 0)
                 .alpha(0f)
-                .withEndAction(() -> rootView.setVisibility(View.GONE));
+                .withEndAction(() -> rootView.setVisibility(View.GONE))
+                .start();
         visible = false;
     }
 
