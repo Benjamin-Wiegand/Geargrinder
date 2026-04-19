@@ -122,6 +122,14 @@
 
             </LinearLayout>
 
+            <ImageButton
+                android:id="@+id/soft_back_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/soft_back"
+                android:background="?selectableItemBackgroundBorderless"
+                />
+
         </LinearLayout>
 
     </LinearLayout>

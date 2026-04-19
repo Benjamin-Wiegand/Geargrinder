@@ -92,6 +92,8 @@ public class ProjectionActivity extends AppCompatActivity implements MakeshiftBi
 
         }
 
+        findViewById(R.id.soft_back_button).setOnClickListener(v -> getOnBackPressedDispatcher().onBackPressed());
+
         // components
         taskManager = new ProjectionTaskManager(findViewById(R.id.content_frame));
         appDock = new AppDock(findViewById(R.id.app_dock), taskManager, this);
