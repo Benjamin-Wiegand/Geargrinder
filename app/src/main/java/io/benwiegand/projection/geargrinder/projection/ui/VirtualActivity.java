@@ -11,6 +11,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -106,26 +107,28 @@ public class VirtualActivity implements SurfaceHolder.Callback {
         return rootView.getContext();
     }
 
-    public void launch() throws ProjectedAppLaunchException {
-        if (launched) Log.i(TAG, "re-launching");
-        else Log.i(TAG, "trying launch");
+    public void launch(boolean forceRelaunch) throws ProjectedAppLaunchException {
+        if (launched) Log.i(TAG, "doing " + (forceRelaunch ? "full" : "soft") + " re-launch");
+        else Log.i(TAG, "trying to launch");
 
         try {
             // display
-            if (virtualDisplay != null && localDisplayFallback) {
-                Log.i(TAG, "releasing local virtual display for re-launch");
+            if ((virtualDisplay != null && localDisplayFallback) || forceRelaunch) {
+                Log.i(TAG, "releasing" + (localDisplayFallback ? " local " : " ") + "virtual display for re-launch");
                 virtualDisplay.release();
                 virtualDisplay = null;
                 launched = false;
             }
 
             if (virtualDisplay == null) {
+                Surface surface = surfaceView.getHolder().getSurface();
+
                 VirtualDisplayController virtualDisplay;
                 try {
                     virtualDisplay = PrivdVirtualDisplayProxy.tryCreateWithFallbackFlags(
                             privd, VIRTUAL_DISPLAY_NAME,
                             width, height, density,
-                            null, PRIVD_VIRTUAL_DISPLAY_FLAGS
+                            surface, PRIVD_VIRTUAL_DISPLAY_FLAGS
                     );
 
                     localDisplayFallback = false;
@@ -141,7 +144,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
                         virtualDisplay = new LocalVirtualDisplayController(
                                 dm, VIRTUAL_DISPLAY_NAME,
                                 width, height, density,
-                                null, LOCAL_VIRTUAL_DISPLAY_FLAGS
+                                surface, LOCAL_VIRTUAL_DISPLAY_FLAGS
                         );
 
                         localDisplayFallback = true;
@@ -178,7 +181,7 @@ public class VirtualActivity implements SurfaceHolder.Callback {
 
     private boolean tryLaunch() {
         try {
-            launch();
+            launch(false);
             return true;
         } catch (Throwable ignored) { }
         return false;
@@ -266,28 +269,25 @@ public class VirtualActivity implements SurfaceHolder.Callback {
 
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-        if (virtualDisplay != null && virtualDisplay.getSurface() != holder.getSurface()) {
-            Log.d(TAG, "setting new surface");
-            virtualDisplay.setSurface(holder.getSurface());
-            invalidateFrame();
-        }
-
         onLayoutUpdated(width, height);
     }
 
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surface created");
+        if (virtualDisplay != null)
+            virtualDisplay.setSurface(holder.getSurface());
+
         invalidateFrame();
     }
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surface destroyed");
-        if (virtualDisplay != null) {
+        if (virtualDisplay != null)
             virtualDisplay.setSurface(null);
-            invalidateFrame();
-        }
+
+        invalidateFrame();
     }
 
     private boolean onMotionEvent(View view, MotionEvent event) {

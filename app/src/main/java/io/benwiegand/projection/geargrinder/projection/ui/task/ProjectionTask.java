@@ -179,7 +179,7 @@ public class ProjectionTask {
 
     private void relaunchActivity(VirtualActivity activity) {
         try {
-            activity.launch();
+            activity.launch(true);
             splash.hide();
         } catch (UserFriendlyException e) {
             errorDialog(getContext(), e)
