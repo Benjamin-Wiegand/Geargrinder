@@ -1,18 +1,18 @@
 # Flywheel
 > [!caution]
-> This is experimental software in active development. DO NOT USE WHILE DRIVING.
+> This is experimental software in active development. USE AT YOUR OWN RISK.
 
-An Android Auto alternative for de-googled phones. Full protocol-level re-implementation from scratch.
+A free and open source alternative to Android Auto for de-googled phones, compatible with existing headunits.
 
-![picture of it running](https://ben.wiegand.pw/img/geargrinder-dev-notice-thumb.webp)
+![picture of it running](https://ben.wiegand.pw/img/flywheel-dev-emulated-thumb.webp)
 
 ## warnings
 
 This is experimental software:
 
+- Use it at your own risk.
 - Do not use it while driving.
 - I am not responsible for bricked headunits.
-- There are no published builds yet.
 
 ## status
 
@@ -24,23 +24,23 @@ Some (most?) certified/OEM Android Auto headunits verify an SSL certificate prov
 
 There are some exceptions, but I don't have a large enough sample to verify if they are the exception or the rule yet.
 
-To use Flywheel with these headunits, you need to obtain the private key and SSL certificate used by the official Android Auto app. Instructions for this are not yet available in this repository, this process is not trivial, **and there is no secret menu in the Android Auto app which exposes these (to my knowledge)**, but there are multiple ways to go about it if you know what you're doing, and other ways if not (see tip below). 
+To use Flywheel with these headunits, you need to obtain the private key and SSL certificate used by the official Android Auto app. Instructions for this are not yet available in this repository, but there are multiple ways to go about it if you know what you're doing.
 
 > [!tip]
-> You may also be able to find working (but usually expired) Android Auto app key/certificate pairs from elsewhere on the Internet. These will work, but usually only if you to set the clock back on your headunit to before they expired.
+> You may also be able to find working (but usually expired) Android Auto app key/certificate pairs from elsewhere on the Internet. 
+> These may work, but usually only if you to set the clock back on your headunit to before they expired.
 
-Once you obtain matching private key and certificate files, you can import them into Flywheel via the settings menu (Settings > Certificates and keys). If successful, you should now be allowed to enable the "Use imported keys" option. Once enabled, the imported key and certificate will be used the next time you try connecting to your headunit.
+Once you obtain matching private key and certificate files, you can import them into Flywheel via the settings menu (Settings > Certificates and keys). 
+After importing, you can enable the "Use imported keys" option, which will cause Flywheel to use the imported key and certificate when you try connecting to your headunit.
 
 ### headunit compatibility
-
-> [!warning]
-> I have no idea how your car will react to communications from this app. Be prepared for unforeseen consequences.
-> 
-> If you accept the risks and want to help, please open an issue with the results (regardless of success).
 
 > [!note]
 > Some headunits **may** work with Flywheel's self-signed keys. If not, then you may need to use keys and certificates extracted from the Android Auto app.
 > Please see the [authentication](#authentication) section for more information.
+
+> [!warning]
+> I have no idea how your specific car/headunit will react to communications from this app. Be prepared for unforeseen consequences.
 
 Tested and working on OEM car headunits from these cars:
 - 2021-2024 Nissan Kicks SV/SR
@@ -49,10 +49,11 @@ Tested and working on OEM car headunits from these cars:
     - Authentication: Works with both self-signed (CN=Bob) and imported keys. Date is adjustable.
     - Notes: Only tested outside of a car, I don't have the car, just the stereo.
 
+If your headunit isn't listed, you accept the risks, and you want to help, please [open an issue](https://github.com/Benjamin-Wiegand/Flywheel/issues/new/choose) for a headunit compatibility report.
 
 ### emulator compatibility
 
-Tested and working on these emulators:
+Tested and working on these headunit emulators:
 - [OpenAuto](https://github.com/f1xpl/openauto/)
 - [Headunit Reloaded](https://xdaforums.com/t/android-4-1-headunit-reloaded-for-android-auto-with-wifi.3432348/)
 
@@ -62,16 +63,15 @@ Tested and working on these emulators:
 > [!NOTE]
 > - KernelSU has not been tested yet.
 
-Root is no longer required to run Flywheel on your phone.
-
 Flywheel currently requires you to either provide root access (via [Magisk](https://github.com/topjohnwu/Magisk/), [KernelSU](https://github.com/tiann/KernelSU/), etc.) or ADB access via [Shizuku](https://github.com/RikkaApps/Shizuku/).
 
 A "no root" mode is planned which will only support screen mirroring.
 
 #### operating system
 > [!NOTE]
-> - Your device may not work with Flywheel even if the OS is supported due to differences between vendors.
+> - Flywheel currently works best on Android >= 10.
 > - Flywheel does not currently work with touch input on Android 9 and below.
+> - Please [report](https://github.com/Benjamin-Wiegand/Flywheel/issues/new/choose) any issues you encounter.
 
 Flywheel currently targets Android 8 and above.
 
@@ -99,8 +99,6 @@ Any OS not listed above has yet to be tested.
 
 #### video
 
-Flywheel uses the MediaCodec library for video encoding. Please report any device-specific issues.
-
 Tested and working on a select few devices from these platforms:
 - Qualcomm
 - Mediatek
@@ -109,10 +107,11 @@ Tested and working on a select few devices from these platforms:
 #### audio
 
 > [!NOTE]
-> DRM-protected audio is currently not captured.
+> Due to security restrictions, some audio is not captured yet:
+> - Phone call audio is not currently captured.
+> - DRM-protected audio is currently not captured.
 
 Currently, your phone must natively support the audio sample rate for your headunit. The only easy way to check this is to just try it.
-
 
 ### working
 - USB communication
@@ -136,6 +135,16 @@ Currently, your phone must natively support the audio sample rate for your headu
     - app drawer
     - pop-up notifications with TTS
 
+
+## bug reporting
+
+If you encounter any bugs, [please open an issue](https://github.com/Benjamin-Wiegand/Flywheel/issues/new/choose) describing the behavior and attach logs from logcat if possible.
+
+## contributing
+
+Feel free to open an [issue](https://github.com/Benjamin-Wiegand/Flywheel/issues/new/choose) detailing something you want to work on (but please state that you will work on it). 
+
+Please note that contributions may not always be accepted, but are always appreciated!
 
 ## thanks
 
